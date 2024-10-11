@@ -739,21 +739,23 @@ export class PoolMessageManager {
                 txFee + forwardGas
               );
 
-              if (tonRevertedFromPool) {
-                txFee = amountIn - tonRevertedFromPool - emulatedGas;
+              /* TODO: calc correct txFee */
 
-                message = this.createSwapExactInMessage(
-                  userJettonWallet,
-                  routerJettonWallet,
-                  recipient,
-                  amountIn,
-                  minimumAmountOut,
-                  priceLimitSqrt,
-                  swapType,
-                  txFee,
-                  txFee + forwardGas
-                );
-              }
+              // if (tonRevertedFromPool) {
+              //   txFee = amountIn - tonRevertedFromPool - emulatedGas;
+
+              //   message = this.createSwapExactInMessage(
+              //     userJettonWallet,
+              //     routerJettonWallet,
+              //     recipient,
+              //     amountIn,
+              //     minimumAmountOut,
+              //     priceLimitSqrt,
+              //     swapType,
+              //     txFee,
+              //     txFee + forwardGas
+              //   );
+              // }
               break;
 
             case SwapType.JETTON_TO_TON:
