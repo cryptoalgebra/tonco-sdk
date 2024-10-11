@@ -1,3 +1,4 @@
+// @ts-nocheck
 import {
   beginCell,
   Builder,
@@ -55,7 +56,10 @@ const ONCHAIN_CONTENT_PREFIX = 0x00;
 const contentValue: DictionaryValue<string> = {
   serialize: (src: string, builder: Builder) => {
     builder.storeRef(
-      beginCell().storeUint(0, 8).storeStringTail(src).endCell()
+      beginCell()
+        .storeUint(0, 8)
+        .storeStringTail(src)
+        .endCell()
     );
   },
   parse: (src: Slice) => {
@@ -73,7 +77,7 @@ const contentValue: DictionaryValue<string> = {
       );
       return chunkDict
         .values()
-        .map((x) => x.beginParse().loadStringTail())
+        .map(x => x.beginParse().loadStringTail())
         .join('');
     }
     throw Error(`Prefix ${prefix} is not supported yet`);

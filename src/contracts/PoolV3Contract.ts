@@ -127,8 +127,9 @@ export let nftContentToPack: { [s: string]: string | undefined } = {
 };
 
 //export const nftContentPackedDefault: Cell =  embedJettonData(packJettonOnchainMetadata(nftContentToPack), "jetton0", 10, "jetton1", 11)
-export const nftContentPackedDefault: Cell =
-  packJettonOnchainMetadata(nftContentToPack);
+export const nftContentPackedDefault: Cell = packJettonOnchainMetadata(
+  nftContentToPack
+);
 
 export let nftItemContentToPack: { [s: string]: string | undefined } = {
   name: 'AMM Pool Position',
@@ -138,11 +139,10 @@ export let nftItemContentToPack: { [s: string]: string | undefined } = {
   //content_type : "image/png"
 };
 
-export const nftItemContentPackedDefault: Cell =
-  packJettonOnchainMetadata(nftItemContentToPack);
+export const nftItemContentPackedDefault: Cell = packJettonOnchainMetadata(
+  nftItemContentToPack
+);
 
-let nftItemContent1ToPack =
-  'https://pimenovalexander.github.io/resources/icons/metadata.json';
 //const nftItemContentPacked: Cell =  packOffchainMetadata (nftItemContent1ToPack)
 
 export function poolv3ContractConfigToCell(config: PoolV3ContractConfig): Cell {
@@ -191,7 +191,11 @@ export function poolv3ContractConfigToCell(config: PoolV3ContractConfig): Cell {
 
         .endCell()
     )
-    .storeRef(beginCell().storeDict(ticks).endCell())
+    .storeRef(
+      beginCell()
+        .storeDict(ticks)
+        .endCell()
+    )
     .storeRef(
       beginCell()
         .storeRef(config.accountv3_code)
@@ -356,7 +360,9 @@ export class PoolV3Contract implements Contract {
     return body;
   }
 
-  static unpackReinitMessage(body: Cell): {
+  static unpackReinitMessage(
+    body: Cell
+  ): {
     activate_pool?: boolean;
     tickSpacing?: number;
     sqrtPriceX96?: bigint;
@@ -370,8 +376,8 @@ export class PoolV3Contract implements Contract {
     nftItemContentPacked?: Cell;
   } {
     let s = body.beginParse();
-    const op = s.loadUint(32);
-    const query_id = s.loadUint(64);
+    // const op = s.loadUint(32);
+    // const query_id = s.loadUint(64);
     const setAdmin = s.loadUint(1);
     const admin = setAdmin == 1 ? s.loadAddress() : undefined;
     if (setAdmin == 0) {
@@ -449,7 +455,9 @@ export class PoolV3Contract implements Contract {
       .endCell();
   }
 
-  static unpackSetFeesMessage(body: Cell): {
+  static unpackSetFeesMessage(
+    body: Cell
+  ): {
     protocolFee: number;
     lpFee: number;
     currentFee: number;
@@ -458,7 +466,7 @@ export class PoolV3Contract implements Contract {
     const op = s.loadUint(32);
     if (op != ContractOpcodes.POOLV3_SET_FEE) throw Error('Wrong opcode');
 
-    const query_id = s.loadUint(64);
+    // const query_id = s.loadUint(64);
     const protocolFee = s.loadUint(16);
     const lpFee = s.loadUint(16);
     const currentFee = s.loadUint(16);
@@ -531,7 +539,7 @@ export class PoolV3Contract implements Contract {
     if (op != ContractOpcodes.POOLV3_COLLECT_PROTOCOL)
       throw Error('Wrong opcode');
 
-    const query_id = s.loadUint(64);
+    // const query_id = s.loadUint(64);
   }
 
   async sendCollectProtocol(
@@ -888,7 +896,12 @@ export class PoolV3Contract implements Contract {
     owner: Address
   ): Promise<Address> {
     const res = await provider.get('getUserAccountAddress', [
-      { type: 'slice', cell: beginCell().storeAddress(owner).endCell() },
+      {
+        type: 'slice',
+        cell: beginCell()
+          .storeAddress(owner)
+          .endCell(),
+      },
     ]);
     return res.stack.readAddress();
   }
