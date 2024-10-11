@@ -1,1 +1,1 @@
-# Algebra Integral SDK
+# Tonco DEX SDK
