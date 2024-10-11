@@ -15,3 +15,4 @@ export * from './tickList';
 export * from './getTickToPrice';
 export * from './tickLibrary';
 export * from './positionLibrary';
+export * from './validateAndParseAddress';
