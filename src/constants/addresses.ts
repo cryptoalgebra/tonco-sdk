@@ -1,4 +1,4 @@
-export const ROUTER = 'EQBvbJpAoPDdCiabWWdPAgkODytSHB9C47EgRzRFI3iFZfbR';
-export const pTON_MINTER = 'EQCxyl-BUZcA16kiQERsM32TlWIR0KXhhlyXtzBDsOgf9Ara';
+export const ROUTER = 'EQBO-T0NCODKT87McOAK2Vb-Whx_jLFHU5NCDBJYkBcsil9s';
+export const pTON_MINTER = 'EQBlde83gVhXQKGogwCxKbiyB37N5K0mX4YcC9XTR1iFX1iO';
 export const pTON_ROUTER_WALLET =
-  'EQCYp3xzu9mTJwm8gN0gFlzl5Rj7ciDoKnA4fCFwGABdS553';
+  'EQDvHepUtqEvHjlAWL9cpmoTZ_LAsS9bTr8_Uum17eAMtf9L';
