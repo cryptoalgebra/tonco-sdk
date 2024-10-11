@@ -39,6 +39,7 @@
     "@ton/crypto": "^3.3.0",
     "@ton/ton": "^15.1.0",
     "big.js": "^6.2.1",
+    "crc": "^4.3.2",
     "decimal.js-light": "^2.5.1",
     "jsbi": "^3.2.5",
     "numeral": "^2.0.6",
@@ -55,5 +56,5 @@
     "tslib": "^2.6.2",
     "typescript": "^5.2.2"
   },
-  "version": "1.0.2"
+  "version": "1.0.3"
 }

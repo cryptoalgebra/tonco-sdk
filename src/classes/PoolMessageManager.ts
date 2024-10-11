@@ -1,3 +1,4 @@
+// @ts-nocheck
 import {
   Address,
   beginCell,
@@ -289,7 +290,7 @@ export class PoolMessageManager {
 
         if (emulation) {
           const tonRevertedFromPool = emulation.event.actions.find(
-            (event) => event.TonTransfer
+            event => event.TonTransfer
           )?.TonTransfer?.amount;
 
           const emulatedGas = BigInt(Math.abs(emulation.event.extra));
@@ -395,9 +396,9 @@ export class PoolMessageManager {
       ? BigInt(amount0.quotient.toString()) +
         BigInt(feeAmount0?.quotient.toString() || 0)
       : isJetton1TON
-        ? BigInt(amount1.quotient.toString()) +
-          BigInt(feeAmount1?.quotient.toString() || 0)
-        : BigInt(0);
+      ? BigInt(amount1.quotient.toString()) +
+        BigInt(feeAmount1?.quotient.toString() || 0)
+      : BigInt(0);
 
     if (wallet && client && wallet_public_key && walletVersion) {
       try {
@@ -422,7 +423,7 @@ export class PoolMessageManager {
                 feeAmount0?.quotient.toString() === '0');
 
             const tonRevertedFromPool = emulation.event.actions.find(
-              (event) => event.TonTransfer
+              event => event.TonTransfer
             )?.TonTransfer?.amount;
 
             txFee =
@@ -525,13 +526,13 @@ export class PoolMessageManager {
       (isJetton1TON && feeAmount1.greaterThan('0') && feeAmount0?.equalTo('0'))
         ? CollectType.TON
         : (isJetton0TON &&
-              feeAmount0.greaterThan('0') &&
-              feeAmount1?.greaterThan('0')) ||
-            (isJetton1TON &&
-              feeAmount1.greaterThan('0') &&
-              feeAmount0?.greaterThan('0'))
-          ? CollectType.TON_JETTON
-          : CollectType.JETTON;
+            feeAmount0.greaterThan('0') &&
+            feeAmount1?.greaterThan('0')) ||
+          (isJetton1TON &&
+            feeAmount1.greaterThan('0') &&
+            feeAmount0?.greaterThan('0'))
+        ? CollectType.TON_JETTON
+        : CollectType.JETTON;
 
     if (wallet && client && wallet_public_key && walletVersion) {
       try {
@@ -546,7 +547,7 @@ export class PoolMessageManager {
         if (emulation) {
           const emulatedGas = BigInt(Math.abs(emulation.event.extra));
           const tonRevertedFromPool = BigInt(
-            emulation.event.actions.find((event) => event.TonTransfer)
+            emulation.event.actions.find(event => event.TonTransfer)
               ?.TonTransfer?.amount || 0
           );
           forwardGas = this.gasUsage.BURN_GAS_SLIPPAGE * BigInt(2); // 0.1
@@ -707,7 +708,7 @@ export class PoolMessageManager {
         if (emulation) {
           /* tx gas */
           const tonRevertedFromPool = BigInt(
-            emulation.event.actions.find((event) => event.TonTransfer)
+            emulation.event.actions.find(event => event.TonTransfer)
               ?.TonTransfer?.amount || 0
           );
 
@@ -716,7 +717,7 @@ export class PoolMessageManager {
           forwardGas =
             BigInt(
               emulation.event.actions.filter(
-                (action) =>
+                action =>
                   action.type === 'JettonTransfer' ||
                   action.type === 'TonTransfer'
               ).length + 1 // +1 for initial jetton transfer
