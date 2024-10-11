@@ -7,7 +7,11 @@ import {
   Contract,
   contractAddress,
   ContractProvider,
+  Sender,
+  SendMode,
 } from '@ton/core';
+import { packJettonOnchainMetadata } from './common/jettonContent';
+import { ContractOpcodes } from './opCodes';
 import { ADDRESS_ZERO } from '../constants';
 
 const BLACK_HOLE_ADDRESS = Address.parse(ADDRESS_ZERO);
@@ -73,14 +77,6 @@ export class TickInfoWrapper {
   ) {}
 }
 
-type NumberedTickInfo = {
-  tickNum: number;
-  liquidityGross: bigint;
-  liquidityNet: bigint;
-  outerFeeGrowth0Token?: bigint;
-  outerFeeGrowth1Token?: bigint;
-};
-
 const DictionaryTickInfo: DictionaryValue<TickInfoWrapper> = {
   serialize(src, builder) {
     builder.storeUint(src.liquidityGross, 256);
@@ -89,7 +85,7 @@ const DictionaryTickInfo: DictionaryValue<TickInfoWrapper> = {
     builder.storeUint(src.outerFeeGrowth1Token, 256);
   },
   parse(src) {
-    const tickInfo = new TickInfoWrapper();
+    let tickInfo = new TickInfoWrapper();
     tickInfo.liquidityGross = src.loadUintBig(256);
     tickInfo.liquidityNet = src.loadIntBig(128);
     tickInfo.outerFeeGrowth0Token = src.loadUintBig(256);
@@ -97,6 +93,57 @@ const DictionaryTickInfo: DictionaryValue<TickInfoWrapper> = {
     return tickInfo;
   },
 };
+
+export function embedJettonData(
+  content: Cell,
+  jetton0Name: string,
+  decimals0: number,
+  jetton1Name: string,
+  decimals1: number
+): Cell {
+  let p = content.beginParse();
+
+  //console.log("embedJettonData l0 ", Buffer.from(jetton0Name).length )
+  //console.log("embedJettonData l1 ", Buffer.from(jetton1Name).length )
+
+  const result: Cell = beginCell()
+    .storeInt(p.loadUint(8), 8)
+    .storeMaybeRef(p.loadRef())
+    .storeUint(decimals0, 6)
+    .storeUint(Buffer.from(jetton0Name).length, 8)
+    .storeBuffer(Buffer.from(jetton0Name))
+    .storeUint(decimals1, 6)
+    .storeUint(Buffer.from(jetton1Name).length, 8)
+    .storeBuffer(Buffer.from(jetton1Name))
+    .endCell();
+  return result;
+}
+
+export let nftContentToPack: { [s: string]: string | undefined } = {
+  name: 'AMM Pool Minter',
+  description: 'AMM Pool LP Minter',
+  // cover_image: 'https://tonco.io/static/tonco-cover.jpeg',
+  image: 'https://tonco.io/static/tonco-astro.png',
+};
+
+//export const nftContentPackedDefault: Cell =  embedJettonData(packJettonOnchainMetadata(nftContentToPack), "jetton0", 10, "jetton1", 11)
+export const nftContentPackedDefault: Cell =
+  packJettonOnchainMetadata(nftContentToPack);
+
+export let nftItemContentToPack: { [s: string]: string | undefined } = {
+  name: 'AMM Pool Position',
+  description: 'LP Position',
+  image: 'https://tonco.io/static/tonco-astro.png',
+  //content_url : "https://tonco.io/static/tonco-astro.png",
+  //content_type : "image/png"
+};
+
+export const nftItemContentPackedDefault: Cell =
+  packJettonOnchainMetadata(nftItemContentToPack);
+
+let nftItemContent1ToPack =
+  'https://pimenovalexander.github.io/resources/icons/metadata.json';
+//const nftItemContentPacked: Cell =  packOffchainMetadata (nftItemContent1ToPack)
 
 export function poolv3ContractConfigToCell(config: PoolV3ContractConfig): Cell {
   let ticks = Dictionary.empty(Dictionary.Keys.Int(24), DictionaryTickInfo);
@@ -156,7 +203,15 @@ export function poolv3ContractConfigToCell(config: PoolV3ContractConfig): Cell {
     .endCell();
 }
 
-/** Pool  * */
+type NumberedTickInfo = {
+  tickNum: number;
+  liquidityGross: bigint;
+  liquidityNet: bigint;
+  outerFeeGrowth0Token?: bigint;
+  outerFeeGrowth1Token?: bigint;
+};
+
+/** Pool  **/
 export class PoolV3Contract implements Contract {
   constructor(
     readonly address: Address,
@@ -169,20 +224,20 @@ export class PoolV3Contract implements Contract {
   ): boolean {
     // let result1 =  beginCell().storeAddress(jetton0Wallet).endCell().hash() > beginCell().storeAddress(jetton1Wallet).endCell().hash()
 
-    const strHex0 = beginCell()
+    let strHex0 = beginCell()
       .storeAddress(jetton0Wallet)
       .endCell()
       .hash()
       .toString('hex');
-    const strHex1 = beginCell()
+    let strHex1 = beginCell()
       .storeAddress(jetton1Wallet)
       .endCell()
       .hash()
       .toString('hex');
 
-    const result2 = BigInt(`0x${strHex0}`) > BigInt(`0x${strHex1}`);
+    let result2 = BigInt('0x' + strHex0) > BigInt('0x' + strHex1);
 
-    // if (result1 != result2) throw Error("Unexpected")
+    //if (result1 != result2) throw Error("Unexpected")
 
     return result2;
   }
@@ -199,20 +254,383 @@ export class PoolV3Contract implements Contract {
     return new PoolV3Contract(address, init);
   }
 
-  /** Getters * */
+  async sendDeploy(
+    provider: ContractProvider,
+    via: Sender,
+    value: bigint,
+    tickSpacing: number,
+    sqrtPriceX96: bigint,
+
+    opts: {
+      activate_pool?: boolean;
+
+      jetton0Minter?: Address;
+      jetton1Minter?: Address;
+      admin?: Address;
+      controller?: Address;
+
+      nftContentPacked?: Cell;
+      nftItemContentPacked?: Cell;
+    }
+  ) {
+    if (!opts.activate_pool) {
+      opts.activate_pool = false;
+    }
+
+    let minterCell = null;
+    if (opts.jetton0Minter && opts.jetton0Minter) {
+      minterCell = beginCell()
+        .storeAddress(opts.jetton0Minter)
+        .storeAddress(opts.jetton1Minter)
+        .endCell();
+    }
+
+    let body: Cell = beginCell()
+      .storeUint(ContractOpcodes.POOLV3_INIT, 32) // OP code
+      .storeUint(0, 64) // query_id
+      .storeUint(opts.admin ? 1 : 0, 1)
+      .storeAddress(opts.admin) // null is an invalid Address, but valid slice
+      .storeUint(opts.controller ? 1 : 0, 1)
+      .storeAddress(opts.controller)
+
+      .storeUint(1, 1)
+      .storeUint(tickSpacing, 24)
+      .storeUint(1, 1)
+      .storeUint(sqrtPriceX96, 160)
+      .storeUint(1, 1)
+      .storeUint(opts.activate_pool ? 1 : 0, 1)
+
+      .storeRef(opts.nftContentPacked ?? nftContentPackedDefault)
+      .storeRef(opts.nftItemContentPacked ?? nftItemContentPackedDefault)
+      .storeMaybeRef(minterCell)
+      .endCell();
+
+    await provider.internal(via, {
+      value,
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: body,
+    });
+  }
+
+  static reinitMessage(opts: {
+    activate_pool?: boolean;
+    tickSpacing?: number;
+    sqrtPriceX96?: bigint;
+
+    jetton0Minter?: Address;
+    jetton1Minter?: Address;
+    admin?: Address;
+    controller?: Address;
+
+    nftContentPacked?: Cell;
+    nftItemContentPacked?: Cell;
+  }): Cell {
+    let minterCell = null;
+    if (opts.jetton0Minter && opts.jetton0Minter) {
+      minterCell = beginCell()
+        .storeAddress(opts.jetton0Minter)
+        .storeAddress(opts.jetton1Minter)
+        .endCell();
+    }
+
+    let body: Cell = beginCell()
+      .storeUint(ContractOpcodes.POOLV3_INIT, 32) // OP code
+      .storeUint(0, 64) // query_id
+      .storeUint(opts.admin == undefined ? 0 : 1, 1)
+      .storeAddress(opts.admin) // null is an invalid Address, but valid slice
+      .storeUint(opts.controller == undefined ? 0 : 1, 1)
+      .storeAddress(opts.controller)
+
+      .storeUint(opts.tickSpacing == undefined ? 0 : 1, 1)
+      .storeUint(opts.tickSpacing ?? 0, 24)
+      .storeUint(opts.sqrtPriceX96 == undefined ? 0 : 1, 1)
+      .storeUint(opts.sqrtPriceX96 ?? 0, 160)
+      .storeUint(opts.activate_pool == undefined ? 0 : 1, 1)
+      .storeUint(opts.activate_pool ? 1 : 0, 1)
+
+      .storeRef(opts.nftContentPacked ?? beginCell().endCell())
+      .storeRef(opts.nftItemContentPacked ?? beginCell().endCell())
+      .storeMaybeRef(minterCell)
+      .endCell();
+
+    return body;
+  }
+
+  static unpackReinitMessage(body: Cell): {
+    activate_pool?: boolean;
+    tickSpacing?: number;
+    sqrtPriceX96?: bigint;
+
+    jetton0Minter?: Address;
+    jetton1Minter?: Address;
+    admin?: Address;
+    controller?: Address;
+
+    nftContentPacked?: Cell;
+    nftItemContentPacked?: Cell;
+  } {
+    let s = body.beginParse();
+    const op = s.loadUint(32);
+    const query_id = s.loadUint(64);
+    const setAdmin = s.loadUint(1);
+    const admin = setAdmin == 1 ? s.loadAddress() : undefined;
+    if (setAdmin == 0) {
+      s.loadUint(2);
+    }
+
+    const setControl = s.loadUint(1);
+    const controller = setControl == 1 ? s.loadAddress() : undefined;
+    if (setControl == 0) {
+      s.loadUint(2);
+    }
+
+    const setTickSpacing = s.loadUint(1);
+    let tickSpacingV = s.loadUint(24);
+    let tickSpacing = setTickSpacing != 0 ? tickSpacingV : undefined;
+
+    const setPrice = s.loadUint(1);
+    let sqrtPriceX96V = s.loadUintBig(160);
+    let sqrtPriceX96 = setPrice != 0 ? sqrtPriceX96V : undefined;
+
+    const setActive = s.loadUint(1);
+    let activate_poolV = s.loadUint(1) == 1;
+    let activate_pool = setActive != 0 ? activate_poolV : undefined;
+
+    let nftContentPacked = s.loadRef();
+    let nftItemContentPacked = s.loadRef();
+
+    return {
+      admin,
+      controller,
+      tickSpacing,
+      sqrtPriceX96,
+      activate_pool,
+      nftContentPacked,
+      nftItemContentPacked,
+    };
+  }
+
+  async sendReinit(
+    provider: ContractProvider,
+    via: Sender,
+    value: bigint,
+    opts: {
+      activate_pool?: boolean;
+      tickSpacing?: number;
+      sqrtPriceX96?: bigint;
+
+      jetton0Minter?: Address;
+      jetton1Minter?: Address;
+      admin?: Address;
+      controller?: Address;
+
+      nftContentPacked?: Cell;
+      nftItemContentPacked?: Cell;
+    }
+  ) {
+    await provider.internal(via, {
+      value,
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: PoolV3Contract.reinitMessage(opts),
+    });
+  }
+
+  static messageSetFees(
+    protocolFee: number,
+    lpFee: number,
+    currentFee: number
+  ) {
+    return beginCell()
+      .storeUint(ContractOpcodes.POOLV3_SET_FEE, 32) // OP code
+      .storeUint(0, 64) // query_id
+      .storeUint(protocolFee, 16)
+      .storeUint(lpFee, 16)
+      .storeUint(currentFee, 16)
+      .endCell();
+  }
+
+  static unpackSetFeesMessage(body: Cell): {
+    protocolFee: number;
+    lpFee: number;
+    currentFee: number;
+  } {
+    let s = body.beginParse();
+    const op = s.loadUint(32);
+    if (op != ContractOpcodes.POOLV3_SET_FEE) throw Error('Wrong opcode');
+
+    const query_id = s.loadUint(64);
+    const protocolFee = s.loadUint(16);
+    const lpFee = s.loadUint(16);
+    const currentFee = s.loadUint(16);
+    return { protocolFee, lpFee, currentFee };
+  }
+
+  async sendSetFees(
+    provider: ContractProvider,
+    sender: Sender,
+    value: bigint,
+
+    protocolFee: number,
+    lpFee: number,
+    currentFee: number
+  ) {
+    const msg_body = PoolV3Contract.messageSetFees(
+      protocolFee,
+      lpFee,
+      currentFee
+    );
+    await provider.internal(sender, {
+      value,
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: msg_body,
+    });
+  }
+
+  async sendLockPool(
+    provider: ContractProvider,
+    sender: Sender,
+    value: bigint
+  ) {
+    const msg_body = beginCell()
+      .storeUint(ContractOpcodes.POOLV3_LOCK, 32) // OP code
+      .storeUint(0, 64) // query_id
+      .endCell();
+    await provider.internal(sender, {
+      value,
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: msg_body,
+    });
+  }
+
+  async sendUnlockPool(
+    provider: ContractProvider,
+    sender: Sender,
+    value: bigint
+  ) {
+    const msg_body = beginCell()
+      .storeUint(ContractOpcodes.POOLV3_UNLOCK, 32) // OP code
+      .storeUint(0, 64) // query_id
+      .endCell();
+    await provider.internal(sender, {
+      value,
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: msg_body,
+    });
+  }
+
+  static messageCollectProtocol(): Cell {
+    return beginCell()
+      .storeUint(ContractOpcodes.POOLV3_COLLECT_PROTOCOL, 32) // OP code
+      .storeUint(0, 64) // query_id
+      .endCell();
+  }
+
+  static unpackCollectProtocolMessage(body: Cell) {
+    let s = body.beginParse();
+    const op = s.loadUint(32);
+    if (op != ContractOpcodes.POOLV3_COLLECT_PROTOCOL)
+      throw Error('Wrong opcode');
+
+    const query_id = s.loadUint(64);
+  }
+
+  async sendCollectProtocol(
+    provider: ContractProvider,
+    sender: Sender,
+    value: bigint
+  ) {
+    await provider.internal(sender, {
+      value,
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: PoolV3Contract.messageCollectProtocol(),
+    });
+  }
+
+  async sendBurn(
+    provider: ContractProvider,
+    via: Sender,
+    value: bigint,
+    nftIndex: bigint,
+    tickLower: number,
+    tickUpper: number,
+    liquidity2Burn: bigint
+  ) {
+    await provider.internal(via, {
+      value: value,
+      body: beginCell()
+        .storeUint(ContractOpcodes.POOLV3_START_BURN, 32) // op
+        .storeUint(0, 64) // query id
+        .storeUint(nftIndex, 64)
+        .storeUint(liquidity2Burn, 128)
+        .storeInt(tickLower, 24)
+        .storeInt(tickUpper, 24)
+        .endCell(),
+    });
+  }
+
+  /** Getters **/
+
   async getIsActive(provider: ContractProvider) {
     const { stack } = await provider.get('getIsActive', []);
     return stack.readBoolean();
   }
 
-  async getPoolStateAndConfiguration(
-    provider: ContractProvider
-  ): Promise<PoolStateAndConfiguration> {
+  /* If not debug, it can actually would throw the exception */
+  async getIsDebug(provider: ContractProvider) {
+    try {
+      const { stack } = await provider.get('isDebugBuild', []);
+      return stack.readBoolean();
+    } catch (err) {
+      return false;
+    }
+  }
+
+  async getPoolStateAndConfiguration(provider: ContractProvider) {
     const { stack } = await provider.get('getPoolStateAndConfiguration', []);
 
+    //console.log(stack.remaining)
+    if (stack.remaining == 25)
+      return {
+        router_address: stack.readAddress(),
+        admin_address: stack.readAddress(),
+        controller_address: stack.readAddress(),
+
+        jetton0_wallet: stack.readAddress(),
+        jetton1_wallet: stack.readAddress(),
+
+        jetton0_minter: stack.readAddress(),
+        jetton1_minter: stack.readAddress(),
+
+        pool_active: stack.readBoolean(),
+        tick_spacing: stack.readNumber(),
+
+        lp_fee_base: stack.readNumber(),
+        protocol_fee: stack.readNumber(),
+        lp_fee_current: stack.readNumber(),
+
+        tick: stack.readNumber(),
+        price_sqrt: stack.readBigNumber(),
+        liquidity: stack.readBigNumber(),
+
+        feeGrowthGlobal0X128: stack.readBigNumber(),
+        feeGrowthGlobal1X128: stack.readBigNumber(),
+        collectedProtocolFee0: stack.readBigNumber(),
+        collectedProtocolFee1: stack.readBigNumber(),
+
+        nftv3item_counter: stack.readBigNumber(),
+
+        reserve0: stack.readBigNumber(),
+        reserve1: stack.readBigNumber(),
+
+        nftv3items_active: stack.readBigNumber(),
+        ticks_occupied: stack.readNumber(),
+
+        seqno: stack.readBigNumber(),
+      };
     return {
       router_address: stack.readAddress(),
       admin_address: stack.readAddress(),
+      controller_address: BLACK_HOLE_ADDRESS,
 
       jetton0_wallet: stack.readAddress(),
       jetton1_wallet: stack.readAddress(),
@@ -243,21 +661,46 @@ export class PoolV3Contract implements Contract {
 
       nftv3items_active: stack.readBigNumber(),
       ticks_occupied: stack.readNumber(),
+
+      seqno: stack.readBigNumber(),
     };
   }
 
+  /* This is ston.fi version of the data query */
+  /* DEPRECATED
+    async getPoolData(provider: ContractProvider) {
+        const { stack } = await provider.get("get_pool_data", []);
+    
+        return {
+            reserve0 : stack.readBigNumber(),
+            reserve1 : stack.readBigNumber(),
+
+            jetton0_wallet : stack.readAddress(),
+            jetton1_wallet : stack.readAddress(),
+
+            lp_fee_base    : stack.readNumber(),   
+            protocol_fee   : stack.readNumber(),   
+            lp_fee_current : stack.readNumber(),
+
+            admin_address  : stack.readAddress(),
+
+            collectedProtocolFee0 : stack.readBigNumber(), 
+            collectedProtocolFee1 : stack.readBigNumber(), 
+        }
+    }
+    */
+
   /* Tick related getters */
   /**
-   *  Returns a hash object of ticks infos with all internal data starting from key >=tickNumber  or key <= tickNumber
-   *  and no more then number. Unfortunataly there is an internal limit of 255 tickInfos
+   *  Returns a tick by tickNumber. If tick not inited - tick filled with zero will be returned.
+   *  Also pervious tick and next tick numbers are returned
    *
    *
    *  @param provider   blockchain access provider
-   *  @param tickNumber Starting tick. Ticks greater or equal will be returned with back == false, with back == true - less or equal keys will be enumerated
-   *  @param amount     Number of tick infos to be returned
-   *  @param back       directions of ticks
+   *  @param tickNumber Tick to extract data for
    *
-   * */
+   **/
+
   async getTickInfo(provider: ContractProvider, tickNumber: number) {
     const result = await this.getTickInfosFromArr(
       provider,
@@ -308,6 +751,19 @@ export class PoolV3Contract implements Contract {
     return result;
   }
 
+  /**
+   *  Returns a hash object of ticks infos with all internal data starting from key >=tickNumber  or key <= tickNumber
+   *  and no more then number. Unfortunately there is an internal limit of 255 tickInfos
+   *
+   *
+   *  @param provider   blockchain access provider
+   *  @param tickNumber Starting tick. Ticks greater or equal will be returned with back == false, with back == true - less or equal keys will be enumerated
+   *  @param amount     Number of tick infos to be returned
+   *  @param back       directions of ticks
+   *  @param full       should fee related fields be filled
+   *
+   *
+   **/
   async getTickInfosFromArr(
     provider: ContractProvider,
     tickNumber: number,
@@ -315,12 +771,15 @@ export class PoolV3Contract implements Contract {
     back: boolean = false,
     full: boolean = false
   ) {
-    const { stack } = await provider.get('getTickInfosFrom', [
+    const getCallResult = await provider.get('getTickInfosFrom', [
       { type: 'int', value: BigInt(tickNumber) },
       { type: 'int', value: BigInt(amount) },
       { type: 'int', value: BigInt(back ? 1 : 0) },
       { type: 'int', value: BigInt(full ? 1 : 0) },
     ]);
+
+    console.log('Gas consumed: ', getCallResult.gasUsed);
+    const stack = getCallResult.stack;
 
     if (stack.peek().type !== 'tuple') {
       return [];
@@ -370,12 +829,16 @@ export class PoolV3Contract implements Contract {
     provider: ContractProvider,
     zeroForOne: boolean,
     amount: bigint,
-    sqrtPriceLimitX96: bigint
+    sqrtPriceLimitX96: bigint,
+    minOutAmount: bigint = BigInt(0),
+    gasLimit: bigint = BigInt(0)
   ) {
-    const { stack } = await provider.get('getSwapEstimate', [
+    const { stack } = await provider.get('getSwapEstimateGas', [
       { type: 'int', value: BigInt(zeroForOne ? 1 : 0) },
       { type: 'int', value: BigInt(amount) },
       { type: 'int', value: BigInt(sqrtPriceLimitX96) },
+      { type: 'int', value: BigInt(minOutAmount) },
+      { type: 'int', value: BigInt(gasLimit) },
     ]);
     return { amount0: stack.readBigNumber(), amount1: stack.readBigNumber() };
   }
@@ -396,6 +859,27 @@ export class PoolV3Contract implements Contract {
       { type: 'int', value: BigInt(posFeeGrowthInside1X128) },
     ]);
     return { amount0: stack.readBigNumber(), amount1: stack.readBigNumber() };
+  }
+
+  async getFeeGrowthInside(
+    provider: ContractProvider,
+    tickLower: number,
+    tickUpper: number,
+    tickCurrent: number,
+    feeGrowthGlobal0X128: bigint,
+    feeGrowthGlobal1X128: bigint
+  ) {
+    const { stack } = await provider.get('getFeeGrowthInside', [
+      { type: 'int', value: BigInt(tickLower) },
+      { type: 'int', value: BigInt(tickUpper) },
+      { type: 'int', value: BigInt(tickCurrent) },
+      { type: 'int', value: BigInt(feeGrowthGlobal0X128) },
+      { type: 'int', value: BigInt(feeGrowthGlobal1X128) },
+    ]);
+    return {
+      feeGrowthInside0X128: stack.readBigNumber(),
+      feeGrowthInside1X128: stack.readBigNumber(),
+    };
   }
 
   /* Subcontracts getters */
@@ -419,27 +903,35 @@ export class PoolV3Contract implements Contract {
     return res.stack.readAddress();
   }
 
-  /* Main swap math */
-  async getComputeSwapStep(
-    provider: ContractProvider,
-    sqrtRatioCurrentX96: bigint,
-    sqrtRatioTargetX96: bigint,
-    liquidity: bigint,
-    amountRemaining: bigint,
-    feePips: bigint
-  ) {
-    const { stack } = await provider.get('computeSwapStep', [
-      { type: 'int', value: BigInt(sqrtRatioCurrentX96) },
-      { type: 'int', value: BigInt(sqrtRatioTargetX96) },
-      { type: 'int', value: BigInt(liquidity) },
-      { type: 'int', value: BigInt(amountRemaining) },
-      { type: 'int', value: BigInt(feePips) },
-    ]);
+  async getNFTCollectionContent(provider: ContractProvider) {
+    const res = await provider.get('get_collection_data', []);
     return {
-      sqrtRatioNextX96: stack.readBigNumber(),
-      amountIn: stack.readBigNumber(),
-      amountOut: stack.readBigNumber(),
-      feeAmount: stack.readBigNumber(),
+      nftv3item_counter: res.stack.readBigNumber(),
+      nftv3_content: res.stack.readCell(),
+      router_address: res.stack.readAddress(),
+    };
+  }
+
+  async getNFTContent(
+    provider: ContractProvider,
+    index: bigint,
+    nftItemContent: Cell
+  ): Promise<Cell> {
+    const res = await provider.get('get_nft_content', [
+      { type: 'int', value: BigInt(index) },
+      { type: 'cell', cell: nftItemContent },
+    ]);
+    return res.stack.readCell();
+  }
+
+  /* Access code of subcontracts */
+  async getChildContracts(provider: ContractProvider) {
+    const { stack } = await provider.get('getChildContracts', []);
+    return {
+      accountCode: stack.readCell(),
+      positionNFTCode: stack.readCell(),
+      nftCollectionContent: stack.readCell(),
+      nftItemContent: stack.readCell(),
     };
   }
 }
