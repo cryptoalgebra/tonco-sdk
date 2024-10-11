@@ -1,5 +1,4 @@
 {
-  "version": "0.12.5",
   "license": "MIT",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
@@ -32,14 +31,10 @@
     "singleQuote": true,
     "trailingComma": "es5"
   },
-  "name": "@cryptoalgebra/integral-sdk",
-  "author": "cryptoalgebra",
-  "module": "dist/integral-sdk.esm.js",
+  "name": "@toncodex/sdk",
+  "author": "toncodex",
+  "module": "dist/sdk.esm.js",
   "dependencies": {
-    "@ethersproject/abi": "^5.7.0",
-    "@ethersproject/address": "^5.7.0",
-    "@ethersproject/solidity": "^5.7.0",
-    "@ethersproject/units": "^5.7.0",
     "@ton/core": "^0.59.0",
     "@ton/crypto": "^3.3.0",
     "@ton/ton": "^15.1.0",
@@ -59,5 +54,6 @@
     "tsdx": "^0.14.1",
     "tslib": "^2.6.2",
     "typescript": "^5.2.2"
-  }
+  },
+  "version": "1.0.0"
 }
