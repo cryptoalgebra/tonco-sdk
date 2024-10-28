@@ -4,4 +4,6 @@ export * from './tryParseAmount';
 export * from './mint';
 export * from './computePoolAddress';
 export * from './parseWalletVersion';
+export * from './getEmojiHash';
+export * from './emulateMessage';
 // export * from './unwrappedToken';
