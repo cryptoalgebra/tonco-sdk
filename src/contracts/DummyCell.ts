@@ -1,8 +1,5 @@
 import { Address } from '@ton/core';
-
-const BLACK_HOLE_ADDRESS: Address = Address.parse(
-  'EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c'
-);
+import { ADDRESS_ZERO } from '../constants';
 
 export type ContractMessageMeta = {
   name: string;
@@ -11,7 +8,9 @@ export type ContractMessageMeta = {
   comment?: string;
 };
 
-export class DummyBuiler {
+export class DummyBuilder {
+  public remainingBits = 256;
+
   constructor(public op: number) {}
 
   loadUint(bits: number): number {
@@ -31,6 +30,10 @@ export class DummyBuiler {
     return 0;
   }
 
+  preloadBit(): boolean {
+    return true;
+  }
+
   loadBoolean(): boolean {
     return false;
   }
@@ -44,7 +47,7 @@ export class DummyBuiler {
   }
 
   loadAddress(): Address {
-    return BLACK_HOLE_ADDRESS;
+    return Address.parse(ADDRESS_ZERO);
   }
 
   loadCoins(): bigint {
@@ -63,8 +66,8 @@ export class DummyBuiler {
 export class DummyCell {
   constructor(public op: number) {}
 
-  beginParse(): DummyBuiler {
-    return new DummyBuiler(this.op);
+  beginParse(): DummyBuilder {
+    return new DummyBuilder(this.op);
   }
 
   toBoc(): Buffer {

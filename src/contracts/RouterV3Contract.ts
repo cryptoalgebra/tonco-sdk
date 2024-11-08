@@ -9,17 +9,18 @@ import {
   SendMode,
   Slice,
 } from '@ton/core';
-import { ContractOpcodes, OpcodesLookup } from './opCodes';
-import { ContractMessageMeta, DummyCell } from './DummyCell';
+import { ContractErrors, ContractOpcodes } from './opCodes';
 import {
   nftContentPackedDefault,
   nftItemContentPackedDefault,
 } from './PoolV3Contract';
+import { IMPOSSIBLE_FEE } from '../constants';
 
 /** Initial data structures and settings **/
 export type RouterV3ContractConfig = {
-  active: boolean;
   adminAddress: Address;
+  poolFactoryAddress: Address;
+  flags?: bigint;
   poolv3_code: Cell;
   accountv3_code: Cell;
   position_nftv3_code: Cell;
@@ -30,8 +31,9 @@ export function routerv3ContractConfigToCell(
   config: RouterV3ContractConfig
 ): Cell {
   return beginCell()
-    .storeUint(config.active ? 1 : 0, 1)
     .storeAddress(config.adminAddress)
+    .storeAddress(config.poolFactoryAddress)
+    .storeUint(config.flags ?? 0, 64)
     .storeUint(0, 64)
     .storeRef(config.poolv3_code)
     .storeRef(config.accountv3_code)
@@ -43,17 +45,20 @@ export function routerv3ContractConfigToCell(
 export function routerv3ContractCellToConfig(c: Cell): RouterV3ContractConfig {
   let s: Slice = c.beginParse();
 
-  const active: boolean = s.loadUint(1) == 1;
   const adminAddress: Address = s.loadAddress();
-  //   const seqno = s.loadUintBig(64);
+  const poolFactoryAddress: Address = s.loadAddress();
+  const flags = s.loadUintBig(64);
+
+  const seqno = s.loadUintBig(64);
   const poolv3_code: Cell = s.loadRef();
   const accountv3_code: Cell = s.loadRef();
   const position_nftv3_code: Cell = s.loadRef();
   const nonce: bigint = s.loadUintBig(64);
 
   return {
-    active,
     adminAddress,
+    poolFactoryAddress,
+    flags,
     poolv3_code,
     accountv3_code,
     position_nftv3_code,
@@ -99,6 +104,10 @@ export class RouterV3Contract implements Contract {
 
       nftContentPacked?: Cell;
       nftItemContentPacked?: Cell;
+
+      protocolFee?: number;
+      lpFee?: number;
+      currentFee?: number;
     }
   ): Cell {
     const msg_body: Cell = beginCell()
@@ -109,6 +118,10 @@ export class RouterV3Contract implements Contract {
       .storeUint(tickSpacing, 24)
       .storeUint(sqrtPriceX96, 160)
       .storeUint(activatePool ? 1 : 0, 1)
+      .storeUint(opts.protocolFee ? opts.protocolFee : IMPOSSIBLE_FEE, 16)
+      .storeUint(opts.lpFee ? opts.lpFee : IMPOSSIBLE_FEE, 16)
+      .storeUint(opts.currentFee ? opts.currentFee : IMPOSSIBLE_FEE, 16)
+
       .storeRef(opts.nftContentPacked ?? nftContentPackedDefault)
       .storeRef(opts.nftItemContentPacked ?? nftItemContentPackedDefault)
       .storeRef(
@@ -137,17 +150,30 @@ export class RouterV3Contract implements Contract {
 
     nftContentPacked?: Cell;
     nftItemContentPacked?: Cell;
+
+    protocolFee?: number;
+    lpFee?: number;
+    currentFee?: number;
   } {
     let s = body.beginParse();
     const op = s.loadUint(32);
     if (op != ContractOpcodes.ROUTERV3_CREATE_POOL) throw Error('Wrong opcode');
 
-    // const query_id = s.loadUint(64);
+    const query_id = s.loadUint(64);
     const jetton0WalletAddr = s.loadAddress();
     const jetton1WalletAddr = s.loadAddress();
     let tickSpacing = s.loadInt(24);
     let sqrtPriceX96 = s.loadUintBig(160);
     let activatePool = s.loadUint(1) != 0;
+
+    const protocolFeeV = s.loadUint(16);
+    const protocolFee =
+      protocolFeeV < IMPOSSIBLE_FEE ? protocolFeeV : undefined;
+    const lpFeeV = s.loadUint(16);
+    const lpFee = lpFeeV < IMPOSSIBLE_FEE ? lpFeeV : undefined;
+    const currentFeeV = s.loadUint(16);
+    const currentFee = currentFeeV < IMPOSSIBLE_FEE ? currentFeeV : undefined;
+
     let nftContentPacked = s.loadRef();
     let nftItemContentPacked = s.loadRef();
 
@@ -167,6 +193,9 @@ export class RouterV3Contract implements Contract {
       controllerAddress,
       nftContentPacked,
       nftItemContentPacked,
+      protocolFee,
+      lpFee,
+      currentFee,
     };
   }
 
@@ -188,6 +217,10 @@ export class RouterV3Contract implements Contract {
 
       nftContentPacked?: Cell;
       nftItemContentPacked?: Cell;
+
+      protocolFee?: number;
+      lpFee?: number;
+      currentFee?: number;
     }
   ) {
     const msg_body = RouterV3Contract.deployPoolMessage(
@@ -236,7 +269,7 @@ export class RouterV3Contract implements Contract {
     if (op != ContractOpcodes.ROUTERV3_CHANGE_ADMIN)
       throw Error('Wrong opcode');
 
-    // const query_id = s.loadUint(64);
+    const query_id = s.loadUint(64);
     const newAdmin = s.loadAddress();
     return { newAdmin };
   }
@@ -255,14 +288,82 @@ export class RouterV3Contract implements Contract {
     });
   }
 
-  /** Getters **/
-  async getIsLocked(provider: ContractProvider): Promise<boolean> {
-    const { stack } = await provider.get('getIsLocked', []);
-    return stack.readBoolean();
+  static changePoolFactoryMessage(newPoolFactory: Address): Cell {
+    return beginCell()
+      .storeUint(ContractOpcodes.ROUTERV3_CHANGE_POOL_FACTORY, 32) // OP code
+      .storeUint(0, 64) // QueryID what for?
+      .storeAddress(newPoolFactory)
+      .endCell();
   }
 
+  static unpackChangePoolFactoryMessage(
+    body: Cell
+  ): { newPoolFactory: Address } {
+    let s = body.beginParse();
+    const op = s.loadUint(32);
+    if (op != ContractOpcodes.ROUTERV3_CHANGE_POOL_FACTORY)
+      throw Error('Wrong opcode');
+
+    const query_id = s.loadUint(64);
+    const newPoolFactory = s.loadAddress();
+    return { newPoolFactory };
+  }
+
+  async sendChangePoolFactory(
+    provider: ContractProvider,
+    sender: Sender,
+    value: bigint,
+    newPoolFactory: Address
+  ) {
+    const msg_body = RouterV3Contract.changeAdminMessage(newPoolFactory);
+    return await provider.internal(sender, {
+      value,
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: msg_body,
+    });
+  }
+
+  static changeFlagsMessage(flags: bigint): Cell {
+    return beginCell()
+      .storeUint(ContractOpcodes.ROUTERV3_CHANGE_POOL_FACTORY, 32) // OP code
+      .storeUint(0, 64) // QueryID what for?
+      .storeUint(flags, 64)
+      .endCell();
+  }
+
+  static unpackChangeFlagsMessage(body: Cell): bigint {
+    let s = body.beginParse();
+    const op = s.loadUint(32);
+    if (op != ContractOpcodes.ROUTERV3_CHANGE_POOL_FACTORY)
+      throw Error('Wrong opcode');
+
+    const query_id = s.loadUint(64);
+    const flags = s.loadUintBig(64);
+    return flags;
+  }
+
+  async sendChangeFlagsFactory(
+    provider: ContractProvider,
+    sender: Sender,
+    value: bigint,
+    flags: bigint
+  ) {
+    const msg_body = RouterV3Contract.changeFlagsMessage(flags);
+    return await provider.internal(sender, {
+      value,
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: msg_body,
+    });
+  }
+
+  /** Getters **/
   async getAdminAddress(provider: ContractProvider): Promise<Address> {
     const { stack } = await provider.get('getAdminAddress', []);
+    return stack.readAddress();
+  }
+
+  async getPoolFactoryAddress(provider: ContractProvider): Promise<Address> {
+    const { stack } = await provider.get('getPoolFactoryAddress', []);
     return stack.readAddress();
   }
 
@@ -341,312 +442,6 @@ export class RouterV3Contract implements Contract {
     return stack.readCell();
   }
 
-  public static RESULT_SWAP_OK = 0xc64370e5;
-  public static RESULT_BURN_OK = 0xdda48b6a;
-
-  static printParsedInput(body: Cell | DummyCell): ContractMessageMeta[] {
-    let result: ContractMessageMeta[] = [];
-
-    const OpLookup: { [key: number]: string } = OpcodesLookup;
-    let p = body.beginParse();
-    let op: number = p.loadUint(32);
-    console.log('op == ', OpLookup[op]);
-
-    p = body.beginParse();
-    if (op == ContractOpcodes.JETTON_TRANSFER_NOTIFICATION) {
-      result.push({
-        name: `op`,
-        value: `${p.loadUint(32)}`,
-        type: `Uint(32) op`,
-      });
-      result.push({
-        name: `query_id`,
-        value: `${p.loadUint(64)}`,
-        type: `Uint(64) `,
-      });
-      result.push({
-        name: `jetton_amount`,
-        value: `${p.loadCoins()}`,
-        type: `Coins() `,
-      });
-      result.push({
-        name: `from_user`,
-        value: `${p.loadAddress()}`,
-        type: `Address() `,
-      });
-
-      let forwardPayload = p.loadMaybeRef();
-      if (forwardPayload) {
-        result.push({
-          name: `forward_payload`,
-          value: forwardPayload.toBoc().toString('hex'),
-          type: `Cell(), Payload`,
-        });
-      } else {
-        result.push({ name: `forward_payload`, value: `none`, type: `Cell()` });
-      }
-    }
-
-    if (op == ContractOpcodes.ROUTERV3_CREATE_POOL) {
-      result.push({
-        name: `op`,
-        value: `${p.loadUint(32)}`,
-        type: `Uint(32) op`,
-        comment:
-          'Operation that deploys and inits new [Pool](pool.md) contract for two given jettons identified by their wallets. New pool would reorder the jettons to match the ' +
-          'invariant `slice_hash(jetton0_address) > slice_hash(jetton1_address).`',
-      });
-      result.push({
-        name: `query_id`,
-        value: `${p.loadUint(64)}`,
-        type: `Uint(64) `,
-        comment: 'queryid as of the TON documentation',
-      });
-      result.push({
-        name: `jetton_wallet0`,
-        value: `${p.loadAddress()}`,
-        type: `Address()`,
-        comment: 'Address of the jetton0 wallet. Used to compute pool address',
-      });
-      result.push({
-        name: `jetton_wallet1`,
-        value: `${p.loadAddress()}`,
-        type: `Address()`,
-        comment: 'Address of the jetton1 wallet. Used to compute pool address',
-      });
-      result.push({
-        name: `tick_spacing`,
-        value: `${p.loadInt(24)}`,
-        type: `Int(24)  `,
-        comment: 'Tick spacing to be used in the pool',
-      });
-      result.push({
-        name: `initial_priceX96`,
-        value: `${p.loadUintBig(160)}`,
-        type: `Uint(160),PriceX96`,
-        comment: 'Initial price for the pool',
-      });
-      p.loadRef();
-      result.push({
-        name: `nftv3_content`,
-        value: `metadata`,
-        type: `Cell(),Metadata`,
-      });
-      p.loadRef();
-      result.push({
-        name: `nftv3item_content`,
-        value: `metadata`,
-        type: `Cell(),Metadata`,
-      });
-
-      let p1 = p.loadRef().beginParse();
-      result.push({
-        name: `jetton0_minter`,
-        value: `${p1.loadAddress()}`,
-        type: `Address()`,
-        comment: 'Address of the jetton0 minter, used by indexer and frontend',
-      });
-      result.push({
-        name: `jetton1_minter`,
-        value: `${p1.loadAddress()}`,
-        type: `Address()`,
-        comment: 'Address of the jetton1 minter, used by indexer and frontend',
-      });
-      if (p1.preloadUint(2) == 0) {
-        result.push({
-          name: `controller_addr`,
-          value: `null`,
-          type: `Address()`,
-          comment:
-            'Address that is allowed to change the fee. Can always be updated by admin',
-        });
-      } else {
-        result.push({
-          name: `controller_addr`,
-          value: `${p1.loadAddress()}`,
-          type: `Address()`,
-        });
-      }
-    }
-
-    if (op == ContractOpcodes.POOLV3_FUND_ACCOUNT) {
-      result.push({
-        name: `op`,
-        value: `${p.loadUint(32)}`,
-        type: `Uint(32) op`,
-      });
-      result.push({
-        name: `jetton_target_w`,
-        value: `${p.loadAddress()}`,
-        type: `Address() `,
-      });
-      result.push({
-        name: `enough0`,
-        value: `${p.loadCoins()}`,
-        type: `Coins()  `,
-      });
-      result.push({
-        name: `enough1`,
-        value: `${p.loadCoins()}`,
-        type: `Coins()  `,
-      });
-      result.push({
-        name: `liquidity`,
-        value: `${p.loadUint(128)}`,
-        type: `Uint(128)`,
-      });
-      result.push({
-        name: `tickLower`,
-        value: `${p.loadInt(24)}`,
-        type: `Int(24)  `,
-      });
-      result.push({
-        name: `tickUpper`,
-        value: `${p.loadInt(24)}`,
-        type: `Int(24)  `,
-      });
-    }
-
-    if (op == ContractOpcodes.ROUTERV3_PAY_TO) {
-      result.push({
-        name: `op`,
-        value: `${p.loadUint(32)}`,
-        type: `Uint(32) op`,
-      });
-      result.push({
-        name: `query_id`,
-        value: `${p.loadUint(64)}`,
-        type: `Uint(64) `,
-      });
-      result.push({
-        name: `owner`,
-        value: `${p.loadAddress()}`,
-        type: `Address()`,
-      });
-
-      let exit_code = p.preloadUint(32);
-      result.push({
-        name: `exit_code`,
-        value: `${p.loadUint(32)}`,
-        type: `Uint(32) `,
-      });
-
-      let hasCoinsInfo = p.loadBoolean();
-      let hasIndexerInfo = p.loadBoolean();
-
-      if (hasCoinsInfo) {
-        let p1 = p.loadRef().beginParse();
-        result.push({
-          name: `amount0`,
-          value: `${p1.loadCoins()}`,
-          type: `Coins()  `,
-        });
-        result.push({
-          name: `jetton0_address`,
-          value: `${p1.loadAddress()}`,
-          type: `Address()`,
-        });
-        result.push({
-          name: `amount1`,
-          value: `${p1.loadCoins()}`,
-          type: `Coins()  `,
-        });
-        result.push({
-          name: `jetton1_address`,
-          value: `${p1.loadAddress()}`,
-          type: `Address()`,
-        });
-      }
-
-      if (hasIndexerInfo) {
-        let p1 = p.loadRef().beginParse();
-
-        if (exit_code == RouterV3Contract.RESULT_SWAP_OK) {
-          result.push({
-            name: `liquidity`,
-            value: `${p1.loadUint(128)}`,
-            type: `Uint(128),Indexer`,
-          });
-          result.push({
-            name: `price_sqrt`,
-            value: `${p1.loadUintBig(160)}`,
-            type: `Uint(160),Indexer,PriceX96`,
-          });
-          result.push({
-            name: `tick`,
-            value: `${p1.loadInt(24)}`,
-            type: `Int(24),Indexer`,
-          });
-          result.push({
-            name: `feeGrowthGlobal0X128`,
-            value: `${p1.loadInt(24)}`,
-            type: `Int(256),Indexer`,
-          });
-          result.push({
-            name: `feeGrowthGlobal1X128`,
-            value: `${p1.loadInt(24)}`,
-            type: `Int(256),Indexer`,
-          });
-        }
-
-        if (exit_code == RouterV3Contract.RESULT_BURN_OK) {
-          result.push({
-            name: `nftIndex`,
-            value: `${p1.loadUint(64)}`,
-            type: `Uint(64),Indexer`,
-          });
-          result.push({
-            name: `liquidityBurned`,
-            value: `${p1.loadUint(128)}`,
-            type: `Uint(128),Indexer`,
-          });
-          result.push({
-            name: `tickLower`,
-            value: `${p1.loadInt(24)}`,
-            type: `Int(24),Indexer`,
-          });
-          result.push({
-            name: `tickUpper`,
-            value: `${p1.loadInt(24)}`,
-            type: `Int(24),Indexer`,
-          });
-          result.push({
-            name: `tick`,
-            value: `${p1.loadInt(24)}`,
-            type: `Int(24),Indexer`,
-          });
-        }
-      }
-    }
-
-    if (op == ContractOpcodes.POOLV3_SWAP) {
-      result.push({
-        name: `op`,
-        value: `${p.loadUint(32)}`,
-        type: `Uint(32) op`,
-      });
-      result.push({
-        name: `sender`,
-        value: `${p.loadAddress()}`,
-        type: `Address()`,
-      });
-      result.push({
-        name: `sqrtPriceLimitX96`,
-        value: `${p.loadUintBig(160)}`,
-        type: `Uint(160),PriceX96`,
-      });
-      result.push({
-        name: `minOutAmount`,
-        value: `${p.loadCoins()}`,
-        type: `Coins()  `,
-      });
-      result.push({
-        name: `to_address`,
-        value: `${p.loadAddress()}`,
-        type: `Address()`,
-      });
-    }
-
-    return result;
-  }
+  public static RESULT_SWAP_OK = ContractErrors.POOLV3_RESULT_SWAP_OK;
+  public static RESULT_BURN_OK = ContractErrors.POOLV3_RESULT_BURN_OK;
 }
