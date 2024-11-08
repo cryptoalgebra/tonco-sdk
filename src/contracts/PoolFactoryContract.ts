@@ -61,9 +61,6 @@ export class PoolFactoryContract implements Contract {
     jetton0Wallet: Address,
     jetton1Wallet: Address
   ): Cell {
-    console.log('Minter0 ', jetton0Minter);
-    console.log('Minter1 ', jetton1Minter);
-
     const msg_body: Cell = beginCell()
       .storeUint(ContractOpcodes.POOL_FACTORY_CREATE_POOL, 32) // OP code
       .storeUint(0, 64) // query_id

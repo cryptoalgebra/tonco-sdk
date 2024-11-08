@@ -16,6 +16,7 @@ import { ONE, ZERO } from '../constants/internalConstants';
 import { Jetton, JettonAmount, Percent, Position } from '../entities';
 import { ContractOpcodes } from '../contracts/opCodes';
 import {
+  POOL_FACTORY,
   pTON_MINTER,
   pTON_ROUTER_WALLET,
   ROUTER,
@@ -25,6 +26,7 @@ import { JettonWallet } from '../contracts/common/JettonWallet';
 import { proxyWalletOpcodesV2 } from '../contracts/common/PTonWalletV2';
 import { emulateMessage } from '../functions/emulateMessage';
 import { WalletVersion } from '../types/WalletVersion';
+import { PoolFactoryContract } from '../contracts';
 
 export enum SwapType {
   TON_TO_JETTON = 0,
@@ -110,6 +112,32 @@ export class PoolMessageManager {
     BURN_GAS: toNano(0.3),
     BURN_GAS_SLIPPAGE: toNano(0.05),
   };
+
+  public static createDeployPoolMessage(
+    jetton0Minter: Address,
+    jetton1Minter: Address,
+    sqrtPriceX96: bigint,
+    settings: bigint,
+    jetton0Wallet: Address,
+    jetton1Wallet: Address
+  ): SenderArguments {
+    const payload = PoolFactoryContract.deployPoolMessage(
+      jetton0Minter,
+      jetton1Minter,
+      sqrtPriceX96,
+      settings,
+      jetton0Wallet,
+      jetton1Wallet
+    );
+
+    const message = {
+      to: Address.parse(POOL_FACTORY),
+      value: toNano(0.2),
+      body: payload,
+    };
+
+    return message;
+  }
 
   public static createMintMessage(
     routerJetton0Wallet: Address,
