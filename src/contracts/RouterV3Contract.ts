@@ -53,7 +53,11 @@ export function routerv3ContractCellToConfig(c: Cell): RouterV3ContractConfig {
   const poolv3_code: Cell = s.loadRef();
   const accountv3_code: Cell = s.loadRef();
   const position_nftv3_code: Cell = s.loadRef();
-  const nonce: bigint = s.loadUintBig(64);
+
+  let nonce: bigint | undefined = undefined;
+  if (s.remainingBits != 0) {
+    nonce = s.loadUintBig(64);
+  }
 
   return {
     adminAddress,
@@ -325,21 +329,21 @@ export class RouterV3Contract implements Contract {
 
   static changeFlagsMessage(flags: bigint): Cell {
     return beginCell()
-      .storeUint(ContractOpcodes.ROUTERV3_CHANGE_POOL_FACTORY, 32) // OP code
+      .storeUint(ContractOpcodes.ROUTERV3_CHANGE_FLAGS, 32) // OP code
       .storeUint(0, 64) // QueryID what for?
       .storeUint(flags, 64)
       .endCell();
   }
 
-  static unpackChangeFlagsMessage(body: Cell): bigint {
+  static unpackChangeFlagsMessage(body: Cell) {
     let s = body.beginParse();
     const op = s.loadUint(32);
-    if (op != ContractOpcodes.ROUTERV3_CHANGE_POOL_FACTORY)
+    if (op != ContractOpcodes.ROUTERV3_CHANGE_FLAGS)
       throw Error('Wrong opcode');
 
     const query_id = s.loadUint(64);
     const flags = s.loadUintBig(64);
-    return flags;
+    return { flags: flags };
   }
 
   async sendChangeFlagsFactory(
@@ -357,14 +361,24 @@ export class RouterV3Contract implements Contract {
   }
 
   /** Getters **/
+  async getState(provider: ContractProvider) {
+    const { stack } = await provider.get('getRouterState', []);
+    return {
+      admin: stack.readAddress(),
+      pool_factory: stack.readAddress(),
+      flags: stack.readBigNumber(),
+      pool_seqno: stack.readBigNumber(),
+    };
+  }
+
   async getAdminAddress(provider: ContractProvider): Promise<Address> {
-    const { stack } = await provider.get('getAdminAddress', []);
-    return stack.readAddress();
+    const state = await this.getState(provider);
+    return state.admin;
   }
 
   async getPoolFactoryAddress(provider: ContractProvider): Promise<Address> {
-    const { stack } = await provider.get('getPoolFactoryAddress', []);
-    return stack.readAddress();
+    const state = await this.getState(provider);
+    return state.pool_factory;
   }
 
   async getPoolAddress(

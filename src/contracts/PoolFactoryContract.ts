@@ -53,11 +53,13 @@ export class PoolFactoryContract implements Contract {
     });
   }
 
-  static deployPoolMessage(
+  public static deployPoolMessage(
     jetton0Minter: Address,
     jetton1Minter: Address,
     sqrtPriceX96: bigint,
-    settings: bigint
+    settings: bigint,
+    jetton0Wallet: Address,
+    jetton1Wallet: Address
   ): Cell {
     console.log('Minter0 ', jetton0Minter);
     console.log('Minter1 ', jetton1Minter);
@@ -71,8 +73,8 @@ export class PoolFactoryContract implements Contract {
       .storeUint(settings, 16)
       .storeRef(
         beginCell()
-          .storeAddress(jetton0Minter)
-          .storeAddress(jetton1Minter)
+          .storeAddress(jetton0Wallet)
+          .storeAddress(jetton1Wallet)
           .endCell()
       )
       .endCell();
@@ -94,7 +96,7 @@ export class PoolFactoryContract implements Contract {
     const op = s.loadUint(32);
     if (op != ContractOpcodes.ROUTERV3_CREATE_POOL) throw Error('Wrong opcode');
 
-    // const query_id = s.loadUint(64);
+    const query_id = s.loadUint(64);
     const jetton0Minter = s.loadAddress();
     const jetton1Minter = s.loadAddress();
     const sqrtPriceX96 = s.loadUintBig(160);
@@ -115,6 +117,7 @@ export class PoolFactoryContract implements Contract {
   }
 
   /* Deploy pool */
+
   async sendDeployPool(
     provider: ContractProvider,
     sender: Sender,
@@ -122,13 +125,17 @@ export class PoolFactoryContract implements Contract {
     jetton0Minter: Address,
     jetton1Minter: Address,
     sqrtPriceX96: bigint,
-    settings: bigint
+    settings: bigint,
+    jetton0Wallet: Address,
+    jetton1Wallet: Address
   ) {
     const msg_body = PoolFactoryContract.deployPoolMessage(
       jetton0Minter,
       jetton1Minter,
       sqrtPriceX96,
-      settings
+      settings,
+      jetton0Wallet,
+      jetton1Wallet
     );
     await provider.internal(sender, {
       value,
