@@ -235,7 +235,7 @@ export class PoolMessageManager {
       amount0WithSlippage,
       Address.parse(ROUTER),
       recipient,
-      new Cell(),
+      null,
       forwardGas, // 0.1
       mintRequest0
     );
@@ -244,7 +244,7 @@ export class PoolMessageManager {
       amount1WithSlippage,
       Address.parse(ROUTER),
       recipient,
-      new Cell(),
+      null,
       forwardGas, // 0.1
       mintRequest1
     );
@@ -660,7 +660,8 @@ export class PoolMessageManager {
       .storeAddress(routerJettonWallet) // JettonWallet attached to Router is used to identify target token
       .storeUint(priceLimitSqrt, 160) // Minimum/maximum price that we are ready to reach
       .storeCoins(minimumAmountOut) // Minimum amount to get back
-      .storeAddress(recipient) // Address to recieve result of the swap
+      .storeAddress(recipient) // Address to receive result of the swap
+      .storeUint(0, 1) // Payload Maybe Ref // Address to recieve result of the swap
       .endCell();
 
     switch (swapType) {
@@ -683,7 +684,7 @@ export class PoolMessageManager {
           amountIn,
           Address.parse(ROUTER),
           recipient,
-          new Cell(),
+          null,
           txFee + this.gasUsage.SWAP_GAS_SLIPPAGE,
           swapRequest
         );

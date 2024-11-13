@@ -1,5 +1,5 @@
-export const ROUTER = 'EQDA-TONcOp2IIqfpkGnL2fInc-Cm-ZCS5uy_EF_B3etN1Uv';
-export const POOL_FACTORY = 'EQDLTpnfAPo9n4TL0xXn1eyQ4OywdiSi5iXfhij7SsJbvj7J';
-export const pTON_MINTER = 'EQBlde83gVhXQKGogwCxKbiyB37N5K0mX4YcC9XTR1iFX1iO';
+export const ROUTER = 'EQBu-T0NcoSfIveS6nXpsshKxBRTZKB83XW-gIunhQwDnPtx';
+export const POOL_FACTORY = 'EQAEId08n8NxNtrNxgoqxCbYbLKkh-6bfZRhxYsOwPuh9gfd';
+export const pTON_MINTER = 'EQCUnExmdgwAKADi-j2KPKThyQqTc7U650cgM0g78UzZXn9J';
 export const pTON_ROUTER_WALLET =
-  'EQAJpIhAKOlhedY781lKpxuKVAsmjxGsxWUMwz5BzzDlm17e';
+  'EQDXpvYiMKsDAZOx5US_HQ0yVpdyjbaHsvGpP24t80ENjIKs';
