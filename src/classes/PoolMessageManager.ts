@@ -643,8 +643,8 @@ export class PoolMessageManager {
   }
 
   public static createSwapExactInMessage(
-    userJettonWallet: Address,
-    routerJettonWallet: Address,
+    userJettonWallet: Address, // input jetton wallet attached to user
+    routerJettonWallet: Address, // output jetton wallet attached to router
     recipient: Address,
     amountIn: bigint,
     minimumAmountOut: bigint,

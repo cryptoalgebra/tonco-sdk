@@ -6,4 +6,5 @@ export * from './computePoolAddress';
 export * from './parseWalletVersion';
 export * from './getEmojiHash';
 export * from './emulateMessage';
+export * from './getSwapEstimate';
 // export * from './unwrappedToken';
