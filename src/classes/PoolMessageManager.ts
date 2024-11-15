@@ -340,8 +340,6 @@ export class PoolMessageManager {
           //   messages.length === 1 ? txFee * BigInt(2) : txFee,
           //   forwardGas
           // );
-
-          return;
         }
       } catch (e) {
         console.log('error emulation - ', e);
@@ -352,7 +350,7 @@ export class PoolMessageManager {
       messages,
       txFee,
       forwardGas: forwardGas * BigInt(messages.length),
-      gasLimit: txFee + forwardGas * BigInt(messages.length),
+      gasLimit: messages.length === 1 ? toNano(0.3) : toNano(0.6),
     };
 
     console.log('success emulation - ', emulatedMessages);
@@ -487,7 +485,7 @@ export class PoolMessageManager {
       message,
       txFee,
       forwardGas,
-      gasLimit: txFee + forwardGas,
+      gasLimit: message.value,
     };
 
     return emulatedMessage;
@@ -637,7 +635,7 @@ export class PoolMessageManager {
       message,
       txFee,
       forwardGas,
-      gasLimit: txFee + forwardGas,
+      gasLimit: message.value,
     };
 
     return emulatedMessage;
@@ -833,11 +831,21 @@ export class PoolMessageManager {
       }
     }
 
+    // const emulatedMessage = {
+    //   message,
+    //   txFee: txFee,
+    //   forwardGas,
+    //   gasLimit: txFee + forwardGas,
+    // };
+
     const emulatedMessage = {
       message,
-      txFee: txFee,
+      txFee,
       forwardGas,
-      gasLimit: txFee + forwardGas,
+      gasLimit:
+        swapType === SwapType.TON_TO_JETTON
+          ? message.value - amountIn
+          : message.value,
     };
 
     return emulatedMessage;
