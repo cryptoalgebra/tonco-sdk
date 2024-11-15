@@ -110,7 +110,7 @@ export class PoolMessageManager {
     SWAP_GAS_SLIPPAGE: toNano(0.1),
 
     BURN_GAS: toNano(0.3),
-    BURN_GAS_SLIPPAGE: toNano(0.05),
+    BURN_GAS_SLIPPAGE: toNano(0.1),
   };
 
   public static createDeployPoolMessage(
