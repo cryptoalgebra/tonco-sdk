@@ -2,7 +2,6 @@
 import {
   Address,
   beginCell,
-  Cell,
   toNano,
   SenderArguments,
   Builder,
@@ -103,14 +102,14 @@ export class PoolMessageManager {
     TRANSFER_GAS: toNano(0.05),
 
     MINT_GAS: toNano(0.4),
-    MINT_PART_GAS: toNano(0.2),
-    MINT_GAS_LIMIT: toNano(0.61),
 
-    SWAP_GAS_BASE: toNano(0.4),
+    SWAP_GAS: toNano(0.4),
     SWAP_GAS_SLIPPAGE: toNano(0.1),
 
     BURN_GAS: toNano(0.3),
     BURN_GAS_SLIPPAGE: toNano(0.1),
+
+    DEPLOY_POOL_GAS: toNano(0.2),
   };
 
   public static createDeployPoolMessage(
@@ -132,7 +131,7 @@ export class PoolMessageManager {
 
     const message = {
       to: Address.parse(POOL_FACTORY),
-      value: toNano(0.2),
+      value: this.gasUsage.DEPLOY_POOL_GAS,
       body: payload,
     };
 
@@ -147,8 +146,8 @@ export class PoolMessageManager {
     position: Position,
     recipient: Address,
     slippage: Percent = new Percent(1, 100), // 1 %
-    txFee: bigint = this.gasUsage.MINT_GAS,
-    forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(2) // 2 maximum transfers per 1 msg
+    txFee: bigint = this.gasUsage.MINT_GAS, // 0.4
+    forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(2) // 0.1 // 2 maximum transfers per 1 msg
   ): SenderArguments[] {
     invariant(JSBI.greaterThan(position.liquidity, ZERO), 'ZERO_LIQUIDITY');
 
@@ -292,10 +291,10 @@ export class PoolMessageManager {
     wallet_public_key?: string,
     walletVersion?: WalletVersion
   ) {
-    let txFee = this.gasUsage.MINT_GAS;
+    let txFee = this.gasUsage.MINT_GAS; // 0.4
     const forwardGas = this.gasUsage.TRANSFER_GAS * BigInt(2); // 0.1 // 2 maximum transfers per 1 msg
 
-    let messages = this.createMintMessage(
+    const messages = this.createMintMessage(
       routerJetton0Wallet,
       routerJetton1Wallet,
       userJetton0Wallet,
@@ -330,17 +329,19 @@ export class PoolMessageManager {
             txFee = emulatedGas;
           }
 
-          messages = this.createMintMessage(
-            routerJetton0Wallet,
-            routerJetton1Wallet,
-            userJetton0Wallet,
-            userJetton1Wallet,
-            position,
-            recipient,
-            slippage,
-            messages.length === 1 ? txFee * BigInt(2) : txFee,
-            forwardGas
-          );
+          // const emulated = this.createMintMessage(
+          //   routerJetton0Wallet,
+          //   routerJetton1Wallet,
+          //   userJetton0Wallet,
+          //   userJetton1Wallet,
+          //   position,
+          //   recipient,
+          //   slippage,
+          //   messages.length === 1 ? txFee * BigInt(2) : txFee,
+          //   forwardGas
+          // );
+
+          return;
         }
       } catch (e) {
         console.log('error emulation - ', e);
@@ -402,9 +403,9 @@ export class PoolMessageManager {
     walletVersion?: WalletVersion
   ) {
     let txFee = this.gasUsage.BURN_GAS; // 0.3
-    let forwardGas = BigInt(0);
+    const forwardGas = BigInt(0);
 
-    let message = this.createBurnMessage(
+    const message = this.createBurnMessage(
       poolAddress,
       tokenId,
       tickLower,
@@ -460,22 +461,22 @@ export class PoolMessageManager {
                 BigInt(tonRevertedFromPool || 0) -
                 (isOnlyTon ? -emulatedGas : emulatedGas));
 
-            forwardGas = this.gasUsage.BURN_GAS_SLIPPAGE * BigInt(2); // 0.1
+            // forwardGas = this.gasUsage.BURN_GAS_SLIPPAGE * BigInt(2); // 0.1
           } else {
             txFee = txFee - emulatedGas; // 0.3 - 0.25(approximately gas refund for tx)
 
-            forwardGas = this.gasUsage.BURN_GAS_SLIPPAGE; // 0.05
+            // forwardGas = this.gasUsage.BURN_GAS_SLIPPAGE; // 0.05
           }
 
-          message = this.createBurnMessage(
-            poolAddress,
-            tokenId,
-            tickLower,
-            tickUpper,
-            liquidityToBurn,
-            txFee,
-            forwardGas
-          );
+          // message = this.createBurnMessage(
+          //   poolAddress,
+          //   tokenId,
+          //   tickLower,
+          //   tickUpper,
+          //   liquidityToBurn,
+          //   txFee,
+          //   forwardGas
+          // );
         }
       } catch (e) {
         console.log('error emulation - ', e);
@@ -526,9 +527,9 @@ export class PoolMessageManager {
     walletVersion?: WalletVersion
   ) {
     let txFee = this.gasUsage.BURN_GAS; // 0.3
-    let forwardGas = BigInt(0);
+    const forwardGas = BigInt(0);
 
-    let message = this.createCollectMessage(
+    const message = this.createCollectMessage(
       poolAddress,
       tokenId,
       tickLower,
@@ -578,7 +579,7 @@ export class PoolMessageManager {
             emulation.event.actions.find(event => event.TonTransfer)
               ?.TonTransfer?.amount || 0
           );
-          forwardGas = this.gasUsage.BURN_GAS_SLIPPAGE * BigInt(2); // 0.1
+          // forwardGas = this.gasUsage.BURN_GAS_SLIPPAGE * BigInt(2); // 0.1
 
           const calculateTxWithTonFee = (
             amount: JettonAmount<Jetton>,
@@ -611,21 +612,21 @@ export class PoolMessageManager {
 
             case CollectType.JETTON: // only Jetton or Jetton + Jetton
               txFee = txFee - emulatedGas;
-              forwardGas = this.gasUsage.BURN_GAS_SLIPPAGE; // 0.05
+              // forwardGas = this.gasUsage.BURN_GAS_SLIPPAGE; // 0.05
               break;
 
             default:
               break;
           }
 
-          message = this.createCollectMessage(
-            poolAddress,
-            tokenId,
-            tickLower,
-            tickUpper,
-            txFee,
-            forwardGas
-          );
+          // message = this.createCollectMessage(
+          //   poolAddress,
+          //   tokenId,
+          //   tickLower,
+          //   tickUpper,
+          //   txFee,
+          //   forwardGas
+          // );
         }
       } catch (e) {
         console.log('error emulation - ', e);
@@ -650,7 +651,7 @@ export class PoolMessageManager {
     minimumAmountOut: bigint,
     priceLimitSqrt: bigint,
     swapType: SwapType,
-    txFee: bigint = this.gasUsage.SWAP_GAS_BASE,
+    txFee: bigint = this.gasUsage.SWAP_GAS,
     forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(4) // 4 maximum messages in tx
   ): SenderArguments {
     let swapRequest;
@@ -710,10 +711,10 @@ export class PoolMessageManager {
     wallet_public_key?: string,
     walletVersion?: WalletVersion
   ) {
-    let txFee = this.gasUsage.SWAP_GAS_BASE; // 0.3
-    let forwardGas = this.gasUsage.TRANSFER_GAS * BigInt(4); // 0.2
+    let txFee = this.gasUsage.SWAP_GAS; // 0.3
+    const forwardGas = this.gasUsage.TRANSFER_GAS * BigInt(4); // 0.2
 
-    let message = this.createSwapExactInMessage(
+    const message = this.createSwapExactInMessage(
       userJettonWallet,
       routerJettonWallet,
       recipient,
@@ -743,30 +744,30 @@ export class PoolMessageManager {
 
           const emulatedGas = BigInt(Math.abs(emulation.event.extra));
 
-          forwardGas =
-            BigInt(
-              emulation.event.actions.filter(
-                action =>
-                  action.type === 'JettonTransfer' ||
-                  action.type === 'TonTransfer'
-              ).length + 1 // +1 for initial jetton transfer
-            ) * this.gasUsage.TRANSFER_GAS;
+          // forwardGas =
+          //   BigInt(
+          //     emulation.event.actions.filter(
+          //       action =>
+          //         action.type === 'JettonTransfer' ||
+          //         action.type === 'TonTransfer'
+          //     ).length + 1 // +1 for initial jetton transfer
+          //   ) * this.gasUsage.TRANSFER_GAS;
 
           switch (swapType) {
             case SwapType.TON_TO_JETTON:
               txFee = emulatedGas; // forward gas in the base created message
 
-              message = this.createSwapExactInMessage(
-                userJettonWallet,
-                routerJettonWallet,
-                recipient,
-                amountIn,
-                minimumAmountOut,
-                priceLimitSqrt,
-                swapType,
-                txFee,
-                txFee + forwardGas
-              );
+              // message = this.createSwapExactInMessage(
+              //   userJettonWallet,
+              //   routerJettonWallet,
+              //   recipient,
+              //   amountIn,
+              //   minimumAmountOut,
+              //   priceLimitSqrt,
+              //   swapType,
+              //   txFee,
+              //   txFee + forwardGas
+              // );
 
               /* TODO: calc correct txFee */
 
@@ -792,39 +793,37 @@ export class PoolMessageManager {
                 ? getTonRefundAmount(emulation.trace.children)
                 : BigInt(0);
 
-              console.log(tonAmountOut);
-
               txFee = tonAmountOut
                 ? emulatedGas - (tonRevertedFromPool - tonAmountOut)
                 : emulatedGas;
 
-              message = this.createSwapExactInMessage(
-                userJettonWallet,
-                routerJettonWallet,
-                recipient,
-                amountIn,
-                minimumAmountOut,
-                priceLimitSqrt,
-                swapType,
-                txFee,
-                forwardGas
-              );
+              // message = this.createSwapExactInMessage(
+              //   userJettonWallet,
+              //   routerJettonWallet,
+              //   recipient,
+              //   amountIn,
+              //   minimumAmountOut,
+              //   priceLimitSqrt,
+              //   swapType,
+              //   txFee,
+              //   forwardGas
+              // );
               break;
 
             case SwapType.JETTON_TO_JETTON:
               txFee = BigInt(Math.abs(emulation.event.extra));
 
-              message = this.createSwapExactInMessage(
-                userJettonWallet,
-                routerJettonWallet,
-                recipient,
-                amountIn,
-                minimumAmountOut,
-                priceLimitSqrt,
-                swapType,
-                txFee,
-                forwardGas
-              );
+              // message = this.createSwapExactInMessage(
+              //   userJettonWallet,
+              //   routerJettonWallet,
+              //   recipient,
+              //   amountIn,
+              //   minimumAmountOut,
+              //   priceLimitSqrt,
+              //   swapType,
+              //   txFee,
+              //   forwardGas
+              // );
               break;
           }
           console.log('success emulation - ', emulation);
