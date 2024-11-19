@@ -78,7 +78,8 @@ export function routerv3ContractCellToConfig(c: Cell): RouterV3ContractConfig {
   const accountv3_code: Cell = subcodes.loadRef();
   const position_nftv3_code: Cell = subcodes.loadRef();
 
-  const timelockDelay: bigint = s.loadUintBig(64);
+  const timelocks = s.loadRef().beginParse();
+  const timelockDelay: bigint = timelocks.loadUintBig(64);
 
   let nonce: bigint | undefined = undefined;
   if (s.remainingBits != 0) {
@@ -440,10 +441,12 @@ export class RouterV3Contract implements Contract {
     //        const newFlags = hasNewFlags ? s.loadUintBig(64) : undefined
 
     const hasPoolFactory = s.loadBit();
-    const newPoolFactory = hasPoolFactory ? s.loadAddress() : undefined;
+    const newPoolFactoryV = s.loadAddress();
+    const newPoolFactory = hasPoolFactory ? newPoolFactoryV : undefined;
 
     const hasPoolAdmin = s.loadBit();
-    const newPoolAdmin = hasPoolAdmin ? s.loadAddress() : undefined;
+    const newPoolAdminV = s.loadAddress();
+    const newPoolAdmin = hasPoolAdmin ? newPoolAdminV : undefined;
 
     return { newPoolAdmin, newPoolFactory };
   }
