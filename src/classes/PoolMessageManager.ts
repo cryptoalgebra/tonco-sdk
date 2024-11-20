@@ -248,10 +248,10 @@ export class PoolMessageManager {
       mintRequest1
     );
 
-    if (isJetton1TON && jetton1Amount > BigInt(0)) {
+    if (isJetton1TON && amount1WithSlippage > BigInt(0)) {
       messages.push({
         to: Address.parse(pTON_ROUTER_WALLET),
-        value: jetton1Amount + mintPartGas + forwardGas,
+        value: amount1WithSlippage + mintPartGas + forwardGas, // ton with slippage + 0.2 + 0.1
         body: mintRequest1,
       });
     } else if (!isJetton1TON && jetton1Amount > BigInt(0)) {
@@ -262,10 +262,10 @@ export class PoolMessageManager {
       });
     }
 
-    if (isJetton0TON && jetton0Amount > BigInt(0)) {
+    if (isJetton0TON && amount0WithSlippage > BigInt(0)) {
       messages.push({
         to: Address.parse(pTON_ROUTER_WALLET),
-        value: jetton0Amount + mintPartGas + forwardGas,
+        value: amount0WithSlippage + mintPartGas + forwardGas, // ton with slippage + 0.2 + 0.1
         body: mintRequest0,
       });
     } else if (!isJetton0TON && jetton0Amount > BigInt(0)) {
