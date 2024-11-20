@@ -649,8 +649,8 @@ export class PoolMessageManager {
     minimumAmountOut: bigint,
     priceLimitSqrt: bigint,
     swapType: SwapType,
-    txFee: bigint = this.gasUsage.SWAP_GAS,
-    forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(4) // 4 maximum messages in tx
+    txFee: bigint = this.gasUsage.SWAP_GAS, // 0.4
+    forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(4) // 4 maximum messages in tx = 0.2
   ): SenderArguments {
     let swapRequest;
 
@@ -674,7 +674,7 @@ export class PoolMessageManager {
 
         return {
           to: Address.parse(pTON_ROUTER_WALLET),
-          value: amountIn + forwardGas,
+          value: amountIn + txFee + forwardGas, // ton amountIn + 0.4 + 0.2
           body: swapRequest,
         };
 
@@ -690,7 +690,7 @@ export class PoolMessageManager {
 
         return {
           to: userJettonWallet,
-          value: txFee + forwardGas,
+          value: txFee + forwardGas, // 0.4 + 0.2
           body: payload,
           sendMode: SendMode.PAY_GAS_SEPARATELY,
         };
@@ -709,7 +709,7 @@ export class PoolMessageManager {
     wallet_public_key?: string,
     walletVersion?: WalletVersion
   ) {
-    let txFee = this.gasUsage.SWAP_GAS; // 0.3
+    let txFee = this.gasUsage.SWAP_GAS; // 0.4
     const forwardGas = this.gasUsage.TRANSFER_GAS * BigInt(4); // 0.2
 
     const message = this.createSwapExactInMessage(

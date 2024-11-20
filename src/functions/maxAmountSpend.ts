@@ -6,8 +6,8 @@ import { pTON_MINTER } from '../constants/addresses';
 
 const MIN_NATIVE_CURRENCY_FOR_GAS: JSBI = JSBI.multiply(
   JSBI.exponentiate(JSBI.BigInt(10), JSBI.BigInt(7)),
-  JSBI.BigInt(51)
-); // 0.51 TON
+  JSBI.BigInt(61)
+); // 0.61 TON
 
 /**
  * Given some token amount, return the max that can be spent of it
