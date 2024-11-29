@@ -48,7 +48,7 @@ export class JettonWallet implements Contract {
   async getJettonBalance(provider: ContractProvider) {
     const state = await provider.getState();
     if (state.state.type !== 'active') {
-      return 0n;
+      return BigInt(0);
     }
     const res = await provider.get('get_wallet_data', []);
     return res.stack.readBigNumber();
@@ -68,11 +68,12 @@ export class JettonWallet implements Contract {
     responseAddress: Address,
     customPayload: Cell | null,
     forward_ton_amount: bigint,
-    forwardPayload: Cell | null
+    forwardPayload: Cell | null,
+    query_id: number | bigint = 0
   ) {
     return beginCell()
       .storeUint(0xf8a7ea5, 32)
-      .storeUint(0, 64) // op, queryId
+      .storeUint(query_id, 64) // op, queryId
       .storeCoins(jetton_amount)
       .storeAddress(to)
       .storeAddress(responseAddress)

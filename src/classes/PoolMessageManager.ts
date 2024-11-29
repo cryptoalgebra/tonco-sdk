@@ -146,6 +146,7 @@ export class PoolMessageManager {
     position: Position,
     recipient: Address,
     slippage: Percent = new Percent(1, 100), // 1 %
+    queryId: number | bigint = 0,
     txFee: bigint = this.gasUsage.MINT_GAS, // 0.4
     forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(2) // 0.1 // 2 maximum transfers per 1 msg
   ): SenderArguments[] {
@@ -210,7 +211,7 @@ export class PoolMessageManager {
     if (isJetton0TON) {
       mintRequest0 = beginCell()
         .storeUint(proxyWalletOpcodesV2.tonTransfer, 32)
-        .storeUint(0, 64) // query_id
+        .storeUint(queryId, 64) // query_id
         .storeCoins(jetton0Amount) // ton To Send. It would we wrapped and then lp minted from them
         .storeAddress(recipient) // refundAddress
         .storeUint(1, 1) // flag that shows that paylod is a cell
@@ -222,7 +223,7 @@ export class PoolMessageManager {
     if (isJetton1TON) {
       mintRequest1 = beginCell()
         .storeUint(proxyWalletOpcodesV2.tonTransfer, 32)
-        .storeUint(0, 64) // query_id
+        .storeUint(queryId, 64) // query_id
         .storeCoins(jetton1Amount) // ton To Send. It would we wrapped and then lp minted from them
         .storeAddress(recipient) // refundAddress
         .storeUint(1, 1) // flag that shows that paylod is a cell
@@ -236,7 +237,8 @@ export class PoolMessageManager {
       recipient,
       null,
       forwardGas, // 0.1
-      mintRequest0
+      mintRequest0,
+      queryId
     );
 
     const payload1 = JettonWallet.transferMessage(
@@ -245,7 +247,8 @@ export class PoolMessageManager {
       recipient,
       null,
       forwardGas, // 0.1
-      mintRequest1
+      mintRequest1,
+      queryId
     );
 
     if (isJetton1TON && amount1WithSlippage > BigInt(0)) {
@@ -287,6 +290,7 @@ export class PoolMessageManager {
     position: Position,
     recipient: Address,
     slippage: Percent = new Percent(1, 100), // 1 %
+    queryId: number | bigint = 0,
     client?: Api<unknown>, // ton api client
     wallet_public_key?: string,
     walletVersion?: WalletVersion
@@ -301,7 +305,8 @@ export class PoolMessageManager {
       userJetton1Wallet,
       position,
       recipient,
-      slippage
+      slippage,
+      queryId
     );
 
     /* emulate message */
