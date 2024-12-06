@@ -6,6 +6,7 @@ import {
   SenderArguments,
   Builder,
   SendMode,
+  fromNano,
 } from '@ton/ton';
 import invariant from 'tiny-invariant';
 import JSBI from 'jsbi';
@@ -212,7 +213,7 @@ export class PoolMessageManager {
       mintRequest0 = beginCell()
         .storeUint(proxyWalletOpcodesV2.tonTransfer, 32)
         .storeUint(queryId, 64) // query_id
-        .storeCoins(jetton0Amount) // ton To Send. It would we wrapped and then lp minted from them
+        .storeCoins(amount0WithSlippage) // ton To Send. It would we wrapped and then lp minted from them
         .storeAddress(recipient) // refundAddress
         .storeUint(1, 1) // flag that shows that paylod is a cell
         .storeRef(mintRequest0) // Instructions for the pool
@@ -224,7 +225,7 @@ export class PoolMessageManager {
       mintRequest1 = beginCell()
         .storeUint(proxyWalletOpcodesV2.tonTransfer, 32)
         .storeUint(queryId, 64) // query_id
-        .storeCoins(jetton1Amount) // ton To Send. It would we wrapped and then lp minted from them
+        .storeCoins(amount1WithSlippage) // ton To Send. It would we wrapped and then lp minted from them
         .storeAddress(recipient) // refundAddress
         .storeUint(1, 1) // flag that shows that paylod is a cell
         .storeRef(mintRequest1) // Instructions for the pool
@@ -329,7 +330,49 @@ export class PoolMessageManager {
 
           /* tx fee calc */
           if (tonRevertedFromPool) {
-            txFee = emulatedGas - BigInt(tonRevertedFromPool || 0);
+            const { amount0, amount1 } = position.mintAmounts;
+
+            const isSorted = PoolV3Contract.orderJettonId(
+              routerJetton0Wallet,
+              routerJetton1Wallet
+            );
+
+            const jetton0Amount = isSorted
+              ? BigInt(amount0.toString())
+              : BigInt(amount1.toString());
+            const jetton1Amount = isSorted
+              ? BigInt(amount1.toString())
+              : BigInt(amount0.toString());
+
+            const slippageMultiplier = slippage.add(ONE);
+
+            /* to transfer with slippage */
+            const amount0WithSlippage = BigInt(
+              slippageMultiplier
+                .multiply(jetton0Amount.toString())
+                .quotient.toString()
+            );
+            const amount1WithSlippage = BigInt(
+              slippageMultiplier
+                .multiply(jetton1Amount.toString())
+                .quotient.toString()
+            );
+
+            const isJetton0TON = routerJetton0Wallet.equals(
+              Address.parse(pTON_ROUTER_WALLET)
+            );
+            const isJetton1TON = routerJetton1Wallet.equals(
+              Address.parse(pTON_ROUTER_WALLET)
+            );
+
+            txFee =
+              emulatedGas +
+              (isJetton0TON
+                ? amount0WithSlippage - jetton0Amount
+                : isJetton1TON
+                ? amount1WithSlippage - jetton1Amount
+                : BigInt(0)) -
+              BigInt(tonRevertedFromPool);
           } else {
             txFee = emulatedGas;
           }
@@ -359,6 +402,11 @@ export class PoolMessageManager {
     };
 
     console.log('success emulation - ', emulatedMessages);
+
+    console.log(
+      'ton in msgs:',
+      fromNano(messages[0].value + (messages[1]?.value || 0n))
+    );
 
     return emulatedMessages;
   }
