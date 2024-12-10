@@ -325,12 +325,14 @@ export class Pool {
       // because each iteration of the while loop rounds, we can't optimize this code (relative to the smart contract)
       // by simply traversing to the next available tick, we instead need to exactly replicate
       // tickBitmap.nextInitializedTickWithinOneWord
-      [step.tickNext, step.initialized] =
-        await this.tickDataProvider.nextInitializedTickWithinOneWord(
-          state.tick,
-          zeroForOne,
-          this.tickSpacing
-        );
+      [
+        step.tickNext,
+        step.initialized,
+      ] = await this.tickDataProvider.nextInitializedTickWithinOneWord(
+        state.tick,
+        zeroForOne,
+        this.tickSpacing
+      );
 
       if (step.tickNext < TickMath.MIN_TICK) {
         step.tickNext = TickMath.MIN_TICK;
@@ -339,20 +341,22 @@ export class Pool {
       }
 
       step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.tickNext);
-      [state.sqrtPriceX96, step.amountIn, step.amountOut, step.feeAmount] =
-        SwapMath.computeSwapStep(
-          state.sqrtPriceX96,
-          (
-            zeroForOne
-              ? JSBI.lessThan(step.sqrtPriceNextX96, sqrtPriceLimitX96)
-              : JSBI.greaterThan(step.sqrtPriceNextX96, sqrtPriceLimitX96)
-          )
-            ? sqrtPriceLimitX96
-            : step.sqrtPriceNextX96,
-          state.liquidity,
-          state.amountSpecifiedRemaining,
-          this.fee
-        );
+      [
+        state.sqrtPriceX96,
+        step.amountIn,
+        step.amountOut,
+        step.feeAmount,
+      ] = SwapMath.computeSwapStep(
+        state.sqrtPriceX96,
+        (zeroForOne
+        ? JSBI.lessThan(step.sqrtPriceNextX96, sqrtPriceLimitX96)
+        : JSBI.greaterThan(step.sqrtPriceNextX96, sqrtPriceLimitX96))
+          ? sqrtPriceLimitX96
+          : step.sqrtPriceNextX96,
+        state.liquidity,
+        state.amountSpecifiedRemaining,
+        this.fee
+      );
 
       if (exactInput) {
         state.amountSpecifiedRemaining = JSBI.subtract(
