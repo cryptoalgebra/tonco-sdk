@@ -12,3 +12,7 @@ export const Q192 = JSBI.exponentiate(Q96, JSBI.BigInt(2));
 export const MaxUint256 = JSBI.BigInt(
   '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
 );
+
+export const MaxUint160 = JSBI.BigInt(
+  '0xffffffffffffffffffffffffffffffffffffffff'
+);

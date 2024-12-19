@@ -1,21 +1,8 @@
-import { SqrtPriceMath } from './';
 import JSBI from 'jsbi';
-
-export function mulDivRoundingUp(
-  a: bigint,
-  b: bigint,
-  denominator: bigint
-): bigint {
-  const product = a * b;
-  let result = product / denominator;
-  if (product % denominator !== 0n) {
-    result += 1n;
-  }
-  return result;
-}
+import { mulDivRoundingUp, SqrtPriceMath } from './sqrtPriceMath';
 
 export abstract class SwapMath {
-  static FEE_DENOMINATOR: bigint = 10000n;
+  static FEE_DENOMINATOR: bigint = BigInt(10000);
 
   /**
    * Cannot be constructed.
@@ -23,177 +10,155 @@ export abstract class SwapMath {
   private constructor() {}
 
   public static computeSwapStep(
-    sqrtRatioCurrentX96: JSBI,
-    sqrtRatioTargetX96: JSBI,
-    liquidity: JSBI,
-    amountRemaining: JSBI,
-    feePips: number // Fee computions is done our way in 1/10^4 parts, not like in uniswap were they use 1/10^6 scaler
+    sqrtRatioCurrentX96: bigint,
+    sqrtRatioTargetX96: bigint,
+    liquidity: bigint,
+    amountRemaining: bigint,
+    feePips: bigint // Fee computations is done our way in 1/10^4 parts, not like in uniswap were they use 1/10^6 scaler
   ) {
-    let sqrtRatioNextX96: bigint = 0n;
-    let amountIn: bigint = 0n;
-    let amountOut: bigint = 0n;
-    let feeAmount: bigint = 0n;
-
-    const amountRemainingBn = BigInt(amountRemaining.toString());
+    let sqrtRatioNextX96: bigint = BigInt(0);
+    let amountIn: bigint = BigInt(0);
+    let amountOut: bigint = BigInt(0);
+    let feeAmount: bigint = BigInt(0);
 
     const zeroForOne = sqrtRatioCurrentX96 >= sqrtRatioTargetX96;
-    const exactIn = amountRemainingBn >= 0n;
+    const exactIn = amountRemaining >= BigInt(0);
 
     if (exactIn) {
       const amountRemainingLessFee =
-        (amountRemainingBn * (this.FEE_DENOMINATOR - BigInt(feePips))) /
-        this.FEE_DENOMINATOR;
+        (amountRemaining * (SwapMath.FEE_DENOMINATOR - feePips)) /
+        SwapMath.FEE_DENOMINATOR;
 
       if (zeroForOne) {
-        amountIn = BigInt(
-          SqrtPriceMath.getAmount0Delta(
-            sqrtRatioTargetX96,
-            sqrtRatioCurrentX96,
-            liquidity,
-            true
-          ).toString()
+        amountIn = SqrtPriceMath.getAmount0Delta(
+          sqrtRatioTargetX96,
+          sqrtRatioCurrentX96,
+          liquidity,
+          true
         );
       } else {
-        amountIn = BigInt(
-          SqrtPriceMath.getAmount1Delta(
-            sqrtRatioCurrentX96,
-            sqrtRatioTargetX96,
-            liquidity,
-            true
-          ).toString()
+        amountIn = SqrtPriceMath.getAmount1Delta(
+          sqrtRatioCurrentX96,
+          sqrtRatioTargetX96,
+          liquidity,
+          true
         );
       }
 
       if (amountRemainingLessFee >= amountIn) {
-        sqrtRatioNextX96 = BigInt(sqrtRatioTargetX96.toString());
+        sqrtRatioNextX96 = sqrtRatioTargetX96;
       } else {
-        sqrtRatioNextX96 = BigInt(
-          SqrtPriceMath.getNextSqrtPriceFromInput(
-            sqrtRatioCurrentX96,
-            liquidity,
-            JSBI.BigInt(amountRemainingLessFee.toString()),
-            zeroForOne
-          ).toString()
+        sqrtRatioNextX96 = SqrtPriceMath.getNextSqrtPriceFromInput(
+          sqrtRatioCurrentX96,
+          liquidity,
+          amountRemainingLessFee,
+          zeroForOne
         );
       }
     } else {
       if (zeroForOne) {
-        amountOut = BigInt(
-          SqrtPriceMath.getAmount1Delta(
-            sqrtRatioTargetX96,
-            sqrtRatioCurrentX96,
-            liquidity,
-            false
-          ).toString()
+        amountOut = SqrtPriceMath.getAmount1Delta(
+          sqrtRatioTargetX96,
+          sqrtRatioCurrentX96,
+          liquidity,
+          false
         );
       } else {
-        amountOut = BigInt(
-          SqrtPriceMath.getAmount0Delta(
-            sqrtRatioCurrentX96,
-            sqrtRatioTargetX96,
-            liquidity,
-            false
-          ).toString()
+        amountOut = SqrtPriceMath.getAmount0Delta(
+          sqrtRatioCurrentX96,
+          sqrtRatioTargetX96,
+          liquidity,
+          false
         );
       }
 
       if (-amountRemaining >= amountOut) {
-        sqrtRatioNextX96 = BigInt(sqrtRatioTargetX96.toString());
+        sqrtRatioNextX96 = sqrtRatioTargetX96;
       } else {
-        sqrtRatioNextX96 = BigInt(
-          SqrtPriceMath.getNextSqrtPriceFromOutput(
-            sqrtRatioCurrentX96,
-            liquidity,
-            JSBI.multiply(JSBI.BigInt(-1), amountRemaining),
-            zeroForOne
-          ).toString()
+        sqrtRatioNextX96 = SqrtPriceMath.getNextSqrtPriceFromOutput(
+          sqrtRatioCurrentX96,
+          liquidity,
+          -amountRemaining,
+          zeroForOne
         );
       }
     }
 
-    const max = BigInt(sqrtRatioTargetX96.toString()) === sqrtRatioNextX96;
+    const max = sqrtRatioTargetX96 == sqrtRatioNextX96;
 
     if (zeroForOne) {
       if (max && exactIn) {
         amountIn = amountIn;
       } else {
-        amountIn = BigInt(
-          SqrtPriceMath.getAmount0Delta(
-            JSBI.BigInt(sqrtRatioNextX96.toString()),
-            sqrtRatioCurrentX96,
-            liquidity,
-            true
-          ).toString()
+        amountIn = SqrtPriceMath.getAmount0Delta(
+          sqrtRatioNextX96,
+          sqrtRatioCurrentX96,
+          liquidity,
+          true
         );
       }
 
       if (max && !exactIn) {
         amountOut = amountOut;
       } else {
-        amountOut = BigInt(
-          SqrtPriceMath.getAmount1Delta(
-            JSBI.BigInt(sqrtRatioNextX96.toString()),
-            sqrtRatioCurrentX96,
-            liquidity,
-            false
-          ).toString()
+        amountOut = SqrtPriceMath.getAmount1Delta(
+          sqrtRatioNextX96,
+          sqrtRatioCurrentX96,
+          liquidity,
+          false
         );
       }
     } else {
       if (max && exactIn) {
         amountIn = amountIn;
       } else {
-        amountIn = BigInt(
-          SqrtPriceMath.getAmount1Delta(
-            sqrtRatioCurrentX96,
-            JSBI.BigInt(sqrtRatioNextX96.toString()),
-            liquidity,
-            true
-          ).toString()
+        amountIn = SqrtPriceMath.getAmount1Delta(
+          sqrtRatioCurrentX96,
+          sqrtRatioNextX96,
+          liquidity,
+          true
         );
       }
 
       if (max && !exactIn) {
         amountOut = amountOut;
       } else {
-        amountOut = BigInt(
-          SqrtPriceMath.getAmount0Delta(
-            sqrtRatioCurrentX96,
-            JSBI.BigInt(sqrtRatioNextX96.toString()),
-            liquidity,
-            false
-          ).toString()
+        amountOut = SqrtPriceMath.getAmount0Delta(
+          sqrtRatioCurrentX96,
+          sqrtRatioNextX96,
+          liquidity,
+          false
         );
       }
     }
 
     if (!exactIn && amountOut > -amountRemaining) {
-      amountOut = -amountRemainingBn;
+      amountOut = -amountRemaining;
     }
 
-    if (exactIn && sqrtRatioNextX96 !== BigInt(sqrtRatioTargetX96.toString())) {
+    if (exactIn && sqrtRatioNextX96 != sqrtRatioTargetX96) {
       // we didn't reach the target, so take the remainder of the maximum input as fee
-      feeAmount = amountRemainingBn - amountIn;
+      feeAmount = amountRemaining - amountIn;
     } else {
       feeAmount = mulDivRoundingUp(
         amountIn,
-        BigInt(feePips),
-        SwapMath.FEE_DENOMINATOR - BigInt(feePips)
+        feePips,
+        SwapMath.FEE_DENOMINATOR - feePips
       );
     }
 
-    const returnValues = {
-      sqrtRatioNextX96: JSBI.BigInt(sqrtRatioNextX96.toString()),
-      amountIn: JSBI.BigInt(amountIn.toString()),
-      amountOut: JSBI.BigInt(amountOut.toString()),
-      feeAmount: JSBI.BigInt(feeAmount.toString()),
+    const result = {
+      sqrtRatioNextX96,
+      amountIn,
+      amountOut,
+      feeAmount,
     };
 
     return [
-      returnValues.sqrtRatioNextX96!,
-      returnValues.amountIn!,
-      returnValues.amountOut!,
-      returnValues.feeAmount!,
-    ] as [JSBI, JSBI, JSBI, JSBI];
+      JSBI.BigInt(result.sqrtRatioNextX96.toString()),
+      JSBI.BigInt(result.amountIn.toString()),
+      JSBI.BigInt(result.amountOut.toString()),
+      JSBI.BigInt(result.feeAmount.toString()),
+    ];
   }
 }
