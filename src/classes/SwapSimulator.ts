@@ -1,7 +1,12 @@
 import JSBI from 'jsbi';
 import { LiquidityMath, TickMath } from '../utils';
 import { SwapMath } from '../utils/swapMath';
-import { TickListDataProvider } from '../entities';
+import {
+  Tick,
+  TickConstructorArgs,
+  TickDataProvider,
+  TickListDataProvider,
+} from '../entities';
 
 interface StepComputations {
   sqrtPriceStartX96: bigint;
@@ -13,18 +18,43 @@ interface StepComputations {
   feeAmount: bigint;
 }
 
+/**
+ * Construct a swap simulator
+ * @param sqrtRatioX96 The sqrt of the current ratio of amounts of token1 to token0
+ * @param tickCurrent The current tick of the pool
+ * @param tickSpacing The spacing between ticks
+ * @param liquidity The current value of in range liquidity
+ * @param fee The fee in hundredths of a bips of the input amount of every swap that is collected by the pool
+ * @param ticks The current state of the pool ticks or a data provider that can return tick data
+ */
 export class SwapSimulator {
+  public readonly sqrtRatioX96: bigint;
+  public readonly tickCurrent: number;
+  public readonly tickSpacing: number;
+  public readonly liquidity: bigint;
+  public readonly fee: number;
+  public readonly ticks: TickDataProvider;
+
   constructor(
-    public sqrtRatioX96: bigint,
-    public tickCurrent: number,
-    public tickSpacing: number,
-    public liquidity: bigint,
-    public fee: number,
-    public ticks: TickListDataProvider
-  ) {}
+    sqrtRatioX96: bigint,
+    tickCurrent: number,
+    tickSpacing: number,
+    liquidity: bigint,
+    fee: number,
+    ticks: TickDataProvider | (Tick | TickConstructorArgs)[]
+  ) {
+    this.sqrtRatioX96 = sqrtRatioX96;
+    this.tickCurrent = tickCurrent;
+    this.tickSpacing = tickSpacing;
+    this.liquidity = liquidity;
+    this.fee = fee;
+    this.ticks = Array.isArray(ticks)
+      ? new TickListDataProvider(ticks, tickSpacing)
+      : ticks;
+  }
 
   /**
-   * Given an input amount of a token, return the computed output amount, and a pool with state updated after the trade
+   * Given an input amount of a token, return the computed output amount
    * @param zeroForOne Whether the trade is zero for one
    * @param inputAmount The input amount for which to quote the output amount
    * @param sqrtPriceLimitX96 The Q64.96 sqrt price limit
@@ -41,7 +71,7 @@ export class SwapSimulator {
   }
 
   /**
-   * Given a desired output amount of a token, return the computed input amount and a pool with state updated after the trade
+   * Given a desired output amount of a token, return the computed input amount
    * @param zeroForOne Whether the trade is zero for one
    * @param outputAmount the output amount for which to quote the input amount
    * @param sqrtPriceLimitX96 The Q64.96 sqrt price limit. If zero for one, the price cannot be less than this value after the swap. If one for zero, the price cannot be greater than this value after the swap
@@ -114,7 +144,6 @@ export class SwapSimulator {
       state.amountSpecifiedRemaining !== BigInt(0) &&
       state.sqrtPriceX96 !== sqrtPriceLimitX96
     ) {
-      console.log('loop');
       const step: Partial<StepComputations> = {};
       step.sqrtPriceStartX96 = state.sqrtPriceX96;
 
