@@ -1,62 +1,54 @@
 import JSBI from 'jsbi';
-import { NEGATIVE_ONE, ZERO } from '../constants/internalConstants';
-import { SqrtPriceMath } from './sqrtPriceMath';
-import { FullMath } from './fullMath';
-
-const MAX_FEE = JSBI.exponentiate(JSBI.BigInt(10), JSBI.BigInt(6));
+import { mulDivRoundingUp, SqrtPriceMath } from './sqrtPriceMath';
 
 export abstract class SwapMath {
+  static FEE_DENOMINATOR: bigint = BigInt(10000);
+
   /**
    * Cannot be constructed.
    */
+  private constructor() {}
 
   public static computeSwapStep(
-    sqrtRatioCurrentX96: JSBI,
-    sqrtRatioTargetX96: JSBI,
-    liquidity: JSBI,
-    amountRemaining: JSBI,
-    feePips: number
-  ): [JSBI, JSBI, JSBI, JSBI] {
-    const returnValues: Partial<{
-      sqrtRatioNextX96: JSBI;
-      amountIn: JSBI;
-      amountOut: JSBI;
-      feeAmount: JSBI;
-    }> = {};
+    sqrtRatioCurrentX96: bigint,
+    sqrtRatioTargetX96: bigint,
+    liquidity: bigint,
+    amountRemaining: bigint,
+    feePips: bigint // Fee computations is done our way in 1/10^4 parts, not like in uniswap were they use 1/10^6 scaler
+  ) {
+    let sqrtRatioNextX96: bigint = BigInt(0);
+    let amountIn: bigint = BigInt(0);
+    let amountOut: bigint = BigInt(0);
+    let feeAmount: bigint = BigInt(0);
 
-    const zeroForOne = JSBI.greaterThanOrEqual(
-      sqrtRatioCurrentX96,
-      sqrtRatioTargetX96
-    );
-    const exactIn = JSBI.greaterThanOrEqual(amountRemaining, ZERO);
+    const zeroForOne = sqrtRatioCurrentX96 >= sqrtRatioTargetX96;
+    const exactIn = amountRemaining >= BigInt(0);
 
     if (exactIn) {
-      const amountRemainingLessFee = JSBI.divide(
-        JSBI.multiply(
-          amountRemaining,
-          JSBI.subtract(MAX_FEE, JSBI.BigInt(feePips))
-        ),
-        MAX_FEE
-      );
-      returnValues.amountIn = zeroForOne
-        ? SqrtPriceMath.getAmount0Delta(
-            sqrtRatioTargetX96,
-            sqrtRatioCurrentX96,
-            liquidity,
-            true
-          )
-        : SqrtPriceMath.getAmount1Delta(
-            sqrtRatioCurrentX96,
-            sqrtRatioTargetX96,
-            liquidity,
-            true
-          );
-      if (
-        JSBI.greaterThanOrEqual(amountRemainingLessFee, returnValues.amountIn!)
-      ) {
-        returnValues.sqrtRatioNextX96 = sqrtRatioTargetX96;
+      const amountRemainingLessFee =
+        (amountRemaining * (SwapMath.FEE_DENOMINATOR - feePips)) /
+        SwapMath.FEE_DENOMINATOR;
+
+      if (zeroForOne) {
+        amountIn = SqrtPriceMath.getAmount0Delta(
+          sqrtRatioTargetX96,
+          sqrtRatioCurrentX96,
+          liquidity,
+          true
+        );
       } else {
-        returnValues.sqrtRatioNextX96 = SqrtPriceMath.getNextSqrtPriceFromInput(
+        amountIn = SqrtPriceMath.getAmount1Delta(
+          sqrtRatioCurrentX96,
+          sqrtRatioTargetX96,
+          liquidity,
+          true
+        );
+      }
+
+      if (amountRemainingLessFee >= amountIn) {
+        sqrtRatioNextX96 = sqrtRatioTargetX96;
+      } else {
+        sqrtRatioNextX96 = SqrtPriceMath.getNextSqrtPriceFromInput(
           sqrtRatioCurrentX96,
           liquidity,
           amountRemainingLessFee,
@@ -64,111 +56,109 @@ export abstract class SwapMath {
         );
       }
     } else {
-      returnValues.amountOut = zeroForOne
-        ? SqrtPriceMath.getAmount1Delta(
-            sqrtRatioTargetX96,
-            sqrtRatioCurrentX96,
-            liquidity,
-            false
-          )
-        : SqrtPriceMath.getAmount0Delta(
-            sqrtRatioCurrentX96,
-            sqrtRatioTargetX96,
-            liquidity,
-            false
-          );
-      if (
-        JSBI.greaterThanOrEqual(
-          JSBI.multiply(amountRemaining, NEGATIVE_ONE),
-          returnValues.amountOut
-        )
-      ) {
-        returnValues.sqrtRatioNextX96 = sqrtRatioTargetX96;
+      if (zeroForOne) {
+        amountOut = SqrtPriceMath.getAmount1Delta(
+          sqrtRatioTargetX96,
+          sqrtRatioCurrentX96,
+          liquidity,
+          false
+        );
       } else {
-        returnValues.sqrtRatioNextX96 =
-          SqrtPriceMath.getNextSqrtPriceFromOutput(
-            sqrtRatioCurrentX96,
-            liquidity,
-            JSBI.multiply(amountRemaining, NEGATIVE_ONE),
-            zeroForOne
-          );
+        amountOut = SqrtPriceMath.getAmount0Delta(
+          sqrtRatioCurrentX96,
+          sqrtRatioTargetX96,
+          liquidity,
+          false
+        );
+      }
+
+      if (-amountRemaining >= amountOut) {
+        sqrtRatioNextX96 = sqrtRatioTargetX96;
+      } else {
+        sqrtRatioNextX96 = SqrtPriceMath.getNextSqrtPriceFromOutput(
+          sqrtRatioCurrentX96,
+          liquidity,
+          -amountRemaining,
+          zeroForOne
+        );
       }
     }
 
-    const max = JSBI.equal(sqrtRatioTargetX96, returnValues.sqrtRatioNextX96);
+    const max = sqrtRatioTargetX96 == sqrtRatioNextX96;
 
     if (zeroForOne) {
-      returnValues.amountIn =
-        max && exactIn
-          ? returnValues.amountIn
-          : SqrtPriceMath.getAmount0Delta(
-              returnValues.sqrtRatioNextX96,
-              sqrtRatioCurrentX96,
-              liquidity,
-              true
-            );
-      returnValues.amountOut =
-        max && !exactIn
-          ? returnValues.amountOut
-          : SqrtPriceMath.getAmount1Delta(
-              returnValues.sqrtRatioNextX96,
-              sqrtRatioCurrentX96,
-              liquidity,
-              false
-            );
+      if (max && exactIn) {
+        amountIn = amountIn;
+      } else {
+        amountIn = SqrtPriceMath.getAmount0Delta(
+          sqrtRatioNextX96,
+          sqrtRatioCurrentX96,
+          liquidity,
+          true
+        );
+      }
+
+      if (max && !exactIn) {
+        amountOut = amountOut;
+      } else {
+        amountOut = SqrtPriceMath.getAmount1Delta(
+          sqrtRatioNextX96,
+          sqrtRatioCurrentX96,
+          liquidity,
+          false
+        );
+      }
     } else {
-      returnValues.amountIn =
-        max && exactIn
-          ? returnValues.amountIn
-          : SqrtPriceMath.getAmount1Delta(
-              sqrtRatioCurrentX96,
-              returnValues.sqrtRatioNextX96,
-              liquidity,
-              true
-            );
-      returnValues.amountOut =
-        max && !exactIn
-          ? returnValues.amountOut
-          : SqrtPriceMath.getAmount0Delta(
-              sqrtRatioCurrentX96,
-              returnValues.sqrtRatioNextX96,
-              liquidity,
-              false
-            );
+      if (max && exactIn) {
+        amountIn = amountIn;
+      } else {
+        amountIn = SqrtPriceMath.getAmount1Delta(
+          sqrtRatioCurrentX96,
+          sqrtRatioNextX96,
+          liquidity,
+          true
+        );
+      }
+
+      if (max && !exactIn) {
+        amountOut = amountOut;
+      } else {
+        amountOut = SqrtPriceMath.getAmount0Delta(
+          sqrtRatioCurrentX96,
+          sqrtRatioNextX96,
+          liquidity,
+          false
+        );
+      }
     }
 
-    if (
-      !exactIn &&
-      JSBI.greaterThan(
-        returnValues.amountOut!,
-        JSBI.multiply(amountRemaining, NEGATIVE_ONE)
-      )
-    ) {
-      returnValues.amountOut = JSBI.multiply(amountRemaining, NEGATIVE_ONE);
+    if (!exactIn && amountOut > -amountRemaining) {
+      amountOut = -amountRemaining;
     }
 
-    if (
-      exactIn &&
-      JSBI.notEqual(returnValues.sqrtRatioNextX96, sqrtRatioTargetX96)
-    ) {
+    if (exactIn && sqrtRatioNextX96 != sqrtRatioTargetX96) {
       // we didn't reach the target, so take the remainder of the maximum input as fee
-      returnValues.feeAmount = JSBI.subtract(
-        amountRemaining,
-        returnValues.amountIn!
-      );
+      feeAmount = amountRemaining - amountIn;
     } else {
-      returnValues.feeAmount = FullMath.mulDivRoundingUp(
-        returnValues.amountIn!,
-        JSBI.BigInt(feePips),
-        JSBI.subtract(MAX_FEE, JSBI.BigInt(feePips))
+      feeAmount = mulDivRoundingUp(
+        amountIn,
+        feePips,
+        SwapMath.FEE_DENOMINATOR - feePips
       );
     }
+
+    const result = {
+      sqrtRatioNextX96,
+      amountIn,
+      amountOut,
+      feeAmount,
+    };
 
     return [
-      returnValues.sqrtRatioNextX96!,
-      returnValues.amountIn!,
-      returnValues.amountOut!,
-      returnValues.feeAmount!,
+      JSBI.BigInt(result.sqrtRatioNextX96.toString()),
+      JSBI.BigInt(result.amountIn.toString()),
+      JSBI.BigInt(result.amountOut.toString()),
+      JSBI.BigInt(result.feeAmount.toString()),
     ];
   }
 }

@@ -305,7 +305,6 @@ export class Pool {
     const exactInput = JSBI.greaterThanOrEqual(amountSpecified, ZERO);
 
     // keep track of swap state
-
     const state = {
       amountSpecifiedRemaining: amountSpecified,
       amountCalculated: ZERO,
@@ -314,23 +313,39 @@ export class Pool {
       liquidity: this.liquidity,
     };
 
+    // Limit maximum iterations to avoid infinite loops
+    const MAX_ITERATIONS = 10000;
+    let iterations = 0;
+
     // start swap while loop
     while (
       JSBI.notEqual(state.amountSpecifiedRemaining, ZERO) &&
-      state.sqrtPriceX96 != sqrtPriceLimitX96
+      state.sqrtPriceX96 !== sqrtPriceLimitX96
     ) {
+      if (iterations++ > MAX_ITERATIONS) {
+        console.error('Max iterations exceeded in swap loop', {
+          state,
+          zeroForOne,
+          amountSpecified,
+          sqrtPriceLimitX96,
+        });
+        throw new Error('Swap loop exceeded maximum iterations');
+      }
+
       const step: Partial<StepComputations> = {};
       step.sqrtPriceStartX96 = state.sqrtPriceX96;
 
       // because each iteration of the while loop rounds, we can't optimize this code (relative to the smart contract)
       // by simply traversing to the next available tick, we instead need to exactly replicate
       // tickBitmap.nextInitializedTickWithinOneWord
-      [step.tickNext, step.initialized] =
-        await this.tickDataProvider.nextInitializedTickWithinOneWord(
-          state.tick,
-          zeroForOne,
-          this.tickSpacing
-        );
+      [
+        step.tickNext,
+        step.initialized,
+      ] = await this.tickDataProvider.nextInitializedTickWithinOneWord(
+        state.tick,
+        zeroForOne,
+        this.tickSpacing
+      );
 
       if (step.tickNext < TickMath.MIN_TICK) {
         step.tickNext = TickMath.MIN_TICK;
@@ -339,20 +354,23 @@ export class Pool {
       }
 
       step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.tickNext);
-      [state.sqrtPriceX96, step.amountIn, step.amountOut, step.feeAmount] =
-        SwapMath.computeSwapStep(
-          state.sqrtPriceX96,
-          (
-            zeroForOne
-              ? JSBI.lessThan(step.sqrtPriceNextX96, sqrtPriceLimitX96)
-              : JSBI.greaterThan(step.sqrtPriceNextX96, sqrtPriceLimitX96)
-          )
-            ? sqrtPriceLimitX96
-            : step.sqrtPriceNextX96,
-          state.liquidity,
-          state.amountSpecifiedRemaining,
-          this.fee
-        );
+
+      [
+        state.sqrtPriceX96,
+        step.amountIn,
+        step.amountOut,
+        step.feeAmount,
+      ] = SwapMath.computeSwapStep(
+        BigInt(state.sqrtPriceX96.toString()),
+        (zeroForOne
+        ? JSBI.lessThan(step.sqrtPriceNextX96, sqrtPriceLimitX96)
+        : JSBI.greaterThan(step.sqrtPriceNextX96, sqrtPriceLimitX96))
+          ? BigInt(sqrtPriceLimitX96.toString())
+          : BigInt(step.sqrtPriceNextX96.toString()),
+        BigInt(state.liquidity.toString()),
+        BigInt(state.amountSpecifiedRemaining.toString()),
+        BigInt(this.fee)
+      );
 
       if (exactInput) {
         state.amountSpecifiedRemaining = JSBI.subtract(
@@ -374,7 +392,6 @@ export class Pool {
         );
       }
 
-      // TODO
       if (JSBI.equal(state.sqrtPriceX96, step.sqrtPriceNextX96)) {
         // if the tick is initialized, run the tick transition
         if (step.initialized) {
@@ -382,7 +399,6 @@ export class Pool {
             (await this.tickDataProvider.getTick(step.tickNext)).liquidityNet
           );
           // if we're moving leftward, we interpret liquidityNet as the opposite sign
-          // safe because liquidityNet cannot be type(int128).min
           if (zeroForOne)
             liquidityNet = JSBI.multiply(liquidityNet, NEGATIVE_ONE);
 
@@ -393,7 +409,8 @@ export class Pool {
         }
 
         state.tick = zeroForOne ? step.tickNext - 1 : step.tickNext;
-      } else if (state.sqrtPriceX96 != step.sqrtPriceStartX96) {
+      } else if (JSBI.notEqual(state.sqrtPriceX96, step.sqrtPriceStartX96)) {
+        // updated comparison function
         // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
         state.tick = TickMath.getTickAtSqrtRatio(state.sqrtPriceX96);
       }

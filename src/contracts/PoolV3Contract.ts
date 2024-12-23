@@ -229,7 +229,7 @@ export function poolv3ContractConfigToCell(config: PoolV3ContractConfig): Cell {
     .endCell();
 }
 
-type NumberedTickInfo = {
+export type NumberedTickInfo = {
   tickNum: number;
   liquidityGross: bigint;
   liquidityNet: bigint;

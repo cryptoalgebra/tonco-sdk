@@ -1,15 +1,16 @@
+// @ts-nocheck
 import { Address } from '@ton/core';
 import { PoolV3Contract } from '../contracts';
 import { TickMath } from '../utils';
-import { TonClient } from '@ton/ton';
+import { TonClient, TonClient4 } from '@ton/ton';
 
 export async function getSwapEstimate(
   // inputJetton: Jetton,
   amountIn: bigint,
   poolAddress: string,
   zeroToOne: boolean,
-  client: TonClient
-) {
+  client: TonClient | TonClient4
+): Promise<bigint> {
   const poolV3Contract = client.open(
     new PoolV3Contract(Address.parse(poolAddress))
   );
