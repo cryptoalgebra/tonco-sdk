@@ -66,8 +66,10 @@ export class Position {
     this.liquidity = JSBI.BigInt(liquidity);
   }
 
-  private _mintAmounts: Readonly<{ amount0: JSBI; amount1: JSBI }> | null =
-    null;
+  private _mintAmounts: Readonly<{
+    amount0: JSBI;
+    amount1: JSBI;
+  }> | null = null;
 
   /**
    * Returns the minimum amounts that must be sent in order to mint the amount of liquidity held by the position at
@@ -77,38 +79,46 @@ export class Position {
     if (this._mintAmounts === null) {
       if (this.pool.tickCurrent < this.tickLower) {
         return {
-          amount0: SqrtPriceMath.getAmount0Delta(
-            TickMath.getSqrtRatioAtTick(this.tickLower),
-            TickMath.getSqrtRatioAtTick(this.tickUpper),
-            this.liquidity,
-            true
+          amount0: JSBI.BigInt(
+            SqrtPriceMath.getAmount0Delta(
+              BigInt(TickMath.getSqrtRatioAtTick(this.tickLower).toString()),
+              BigInt(TickMath.getSqrtRatioAtTick(this.tickUpper).toString()),
+              BigInt(this.liquidity.toString()),
+              true
+            ).toString()
           ),
           amount1: ZERO,
         };
       }
       if (this.pool.tickCurrent < this.tickUpper) {
         return {
-          amount0: SqrtPriceMath.getAmount0Delta(
-            this.pool.sqrtRatioX96,
-            TickMath.getSqrtRatioAtTick(this.tickUpper),
-            this.liquidity,
-            true
+          amount0: JSBI.BigInt(
+            SqrtPriceMath.getAmount0Delta(
+              BigInt(this.pool.sqrtRatioX96.toString()),
+              BigInt(TickMath.getSqrtRatioAtTick(this.tickUpper).toString()),
+              BigInt(this.liquidity.toString()),
+              true
+            ).toString()
           ),
-          amount1: SqrtPriceMath.getAmount1Delta(
-            TickMath.getSqrtRatioAtTick(this.tickLower),
-            this.pool.sqrtRatioX96,
-            this.liquidity,
-            true
+          amount1: JSBI.BigInt(
+            SqrtPriceMath.getAmount1Delta(
+              BigInt(TickMath.getSqrtRatioAtTick(this.tickLower).toString()),
+              BigInt(this.pool.sqrtRatioX96.toString()),
+              BigInt(this.liquidity.toString()),
+              true
+            ).toString()
           ),
         };
       }
       return {
         amount0: ZERO,
-        amount1: SqrtPriceMath.getAmount1Delta(
-          TickMath.getSqrtRatioAtTick(this.tickLower),
-          TickMath.getSqrtRatioAtTick(this.tickUpper),
-          this.liquidity,
-          true
+        amount1: JSBI.BigInt(
+          SqrtPriceMath.getAmount1Delta(
+            BigInt(TickMath.getSqrtRatioAtTick(this.tickLower).toString()),
+            BigInt(TickMath.getSqrtRatioAtTick(this.tickUpper).toString()),
+            BigInt(this.liquidity.toString()),
+            true
+          ).toString()
         ),
       };
     }
@@ -138,21 +148,21 @@ export class Position {
         this._token0Amount = JettonAmount.fromRawAmount(
           this.pool.jetton0,
           SqrtPriceMath.getAmount0Delta(
-            TickMath.getSqrtRatioAtTick(this.tickLower),
-            TickMath.getSqrtRatioAtTick(this.tickUpper),
-            this.liquidity,
+            BigInt(TickMath.getSqrtRatioAtTick(this.tickLower).toString()),
+            BigInt(TickMath.getSqrtRatioAtTick(this.tickUpper).toString()),
+            BigInt(this.liquidity.toString()),
             false
-          )
+          ).toString()
         );
       } else if (this.pool.tickCurrent < this.tickUpper) {
         this._token0Amount = JettonAmount.fromRawAmount(
           this.pool.jetton0,
           SqrtPriceMath.getAmount0Delta(
-            this.pool.sqrtRatioX96,
-            TickMath.getSqrtRatioAtTick(this.tickUpper),
-            this.liquidity,
+            BigInt(this.pool.sqrtRatioX96.toString()),
+            BigInt(TickMath.getSqrtRatioAtTick(this.tickUpper).toString()),
+            BigInt(this.liquidity.toString()),
             false
-          )
+          ).toString()
         );
       } else {
         this._token0Amount = JettonAmount.fromRawAmount(
@@ -178,21 +188,21 @@ export class Position {
         this._token1Amount = JettonAmount.fromRawAmount(
           this.pool.jetton1,
           SqrtPriceMath.getAmount1Delta(
-            TickMath.getSqrtRatioAtTick(this.tickLower),
-            this.pool.sqrtRatioX96,
-            this.liquidity,
+            BigInt(TickMath.getSqrtRatioAtTick(this.tickLower).toString()),
+            BigInt(this.pool.sqrtRatioX96.toString()),
+            BigInt(this.liquidity.toString()),
             false
-          )
+          ).toString()
         );
       } else {
         this._token1Amount = JettonAmount.fromRawAmount(
           this.pool.jetton1,
           SqrtPriceMath.getAmount1Delta(
-            TickMath.getSqrtRatioAtTick(this.tickLower),
-            TickMath.getSqrtRatioAtTick(this.tickUpper),
-            this.liquidity,
+            BigInt(TickMath.getSqrtRatioAtTick(this.tickLower).toString()),
+            BigInt(TickMath.getSqrtRatioAtTick(this.tickUpper).toString()),
+            BigInt(this.liquidity.toString()),
             false
-          )
+          ).toString()
         );
       }
     }
@@ -316,8 +326,9 @@ export class Position {
     slippageTolerance: Percent
   ): Readonly<{ amount0: JSBI; amount1: JSBI }> {
     // get lower/upper prices
-    const { sqrtRatioX96Upper, sqrtRatioX96Lower } =
-      this.ratiosAfterSlippage(slippageTolerance);
+    const { sqrtRatioX96Upper, sqrtRatioX96Lower } = this.ratiosAfterSlippage(
+      slippageTolerance
+    );
 
     // construct counterfactual pools
     const poolLower = new Pool(
@@ -377,8 +388,9 @@ export class Position {
     slippageTolerance: Percent
   ): Readonly<{ amount0: JSBI; amount1: JSBI }> {
     // get lower/upper prices
-    const { sqrtRatioX96Upper, sqrtRatioX96Lower } =
-      this.ratiosAfterSlippage(slippageTolerance);
+    const { sqrtRatioX96Upper, sqrtRatioX96Lower } = this.ratiosAfterSlippage(
+      slippageTolerance
+    );
 
     // construct counterfactual pools
     const poolLower = new Pool(
@@ -424,7 +436,9 @@ export class Position {
    * @param slippageTolerance The amount by which the price can 'slip' before the transaction will revert
    * @returns The sqrt ratios after slippage
    */
-  private ratiosAfterSlippage(slippageTolerance: Percent): {
+  private ratiosAfterSlippage(
+    slippageTolerance: Percent
+  ): {
     sqrtRatioX96Lower: JSBI;
     sqrtRatioX96Upper: JSBI;
   } {
