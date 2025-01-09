@@ -106,7 +106,7 @@ export class SwapSimulator {
    * @param sqrtPriceLimitX96 The Q64.96 sqrt price limit. If zero for one, the price cannot be less than this value after the swap. If one for zero, the price cannot be greater than this value after the swap
    * @returns amountCalculated
    */
-  async swap(
+  public async swap(
     zeroForOne: boolean,
     amountSpecified: bigint,
     sqrtPriceLimitX96?: bigint
