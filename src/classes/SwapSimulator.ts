@@ -18,6 +18,14 @@ interface StepComputations {
   feeAmount: bigint;
 }
 
+interface SwapState {
+  amountSpecifiedRemaining: bigint,
+  amountCalculated: bigint,
+  sqrtPriceX96: bigint,
+  tick: number,
+  liquidity: bigint,
+};
+
 /**
  * Construct a swap simulator
  * @param sqrtRatioX96 The sqrt of the current ratio of amounts of token1 to token0
@@ -65,9 +73,9 @@ export class SwapSimulator {
     inputAmount: bigint,
     sqrtPriceLimitX96?: bigint
   ): Promise<bigint> {
-    const amount = await this.swap(zeroForOne, inputAmount, sqrtPriceLimitX96);
+    const newState = await this.swap(zeroForOne, inputAmount, sqrtPriceLimitX96);
 
-    return -amount;
+    return -newState.amountCalculated;
   }
 
   /**
@@ -82,13 +90,13 @@ export class SwapSimulator {
     outputAmount: bigint,
     sqrtPriceLimitX96?: bigint
   ): Promise<bigint> {
-    const amount = await this.swap(
+    const newState = await this.swap(
       zeroForOne,
       -outputAmount,
       sqrtPriceLimitX96
     );
 
-    return amount;
+    return newState.amountCalculated;
   }
 
   /**
@@ -98,12 +106,20 @@ export class SwapSimulator {
    * @param sqrtPriceLimitX96 The Q64.96 sqrt price limit. If zero for one, the price cannot be less than this value after the swap. If one for zero, the price cannot be greater than this value after the swap
    * @returns amountCalculated
    */
-  private async swap(
+  public async swap(
     zeroForOne: boolean,
     amountSpecified: bigint,
     sqrtPriceLimitX96?: bigint
-  ): Promise<bigint> {
-    let toReturn = BigInt(0);
+  ): Promise<SwapState> {    
+     // keep track of swap state
+
+    const state: SwapState = {
+      amountSpecifiedRemaining: amountSpecified,
+      amountCalculated: BigInt(0),
+      sqrtPriceX96: this.sqrtRatioX96,
+      tick: this.tickCurrent,
+      liquidity: this.liquidity,
+    };
 
     if (!sqrtPriceLimitX96) {
       sqrtPriceLimitX96 = zeroForOne
@@ -116,28 +132,19 @@ export class SwapSimulator {
         throw 'RATIO_MIN';
       }
       if (sqrtPriceLimitX96 >= this.sqrtRatioX96) {
-        return toReturn;
+        return state;
       }
     } else {
       if (!(sqrtPriceLimitX96 < BigInt(TickMath.MAX_SQRT_RATIO.toString()))) {
         throw 'RATIO_MAX';
       }
       if (sqrtPriceLimitX96 <= this.sqrtRatioX96) {
-        return toReturn;
+        return state;
       }
     }
 
     const exactInput: boolean = amountSpecified >= BigInt(0);
-
-    // keep track of swap state
-
-    const state = {
-      amountSpecifiedRemaining: amountSpecified,
-      amountCalculated: BigInt(0),
-      sqrtPriceX96: this.sqrtRatioX96,
-      tick: this.tickCurrent,
-      liquidity: this.liquidity,
-    };
+  
 
     // start swap while loop
     while (
@@ -227,6 +234,6 @@ export class SwapSimulator {
       //console.log(`REM = ${state.amountSpecifiedRemaining}`)
     }
 
-    return state.amountCalculated;
+    return state;
   }
 }
