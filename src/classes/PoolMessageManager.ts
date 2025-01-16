@@ -8,6 +8,7 @@ import {
   SendMode,
   fromNano,
 } from '@ton/ton';
+import { Cell } from '@ton/core';
 import invariant from 'tiny-invariant';
 import JSBI from 'jsbi';
 import { crc32 } from 'crc';
@@ -694,6 +695,149 @@ export class PoolMessageManager {
     return emulatedMessage;
   }
 
+  public static createMultihopHops(
+    jettonPath: Address[], // path of jetton attached to router
+    recipient: Address,
+    amountIn: bigint,
+    minimumAmountsOut: bigint[],
+    priceLimitsSqrt: bigint[],
+    swapTypes: SwapType[],
+    txFee: bigint = this.gasUsage.SWAP_GAS, // 0.4
+    forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(4 * minimumAmountsOut.length), // TODO
+    isMainCell: boolean
+  ): any {
+
+    if (!jettonPath.length) return null;
+
+    const jettonRouterWallet = jettonPath.shift();
+    const priceLimitSqrt = priceLimitsSqrt.shift();
+    const minimumAmountOut = minimumAmountsOut.shift();
+    const swapType = swapTypes.shift();
+
+    const isEmpty = !jettonPath.length
+
+    const getInnerMessage = (isEmpty: boolean) => {
+      if (isEmpty) return null
+
+      const innerMessage = beginCell()
+        .storeAddress(Address.parse(ROUTER))
+        .storeCoins(this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * 2n)
+        .storeRef(
+          this.createMultihopHops(
+            jettonPath,
+            recipient,
+            amountIn,
+            minimumAmountsOut,
+            priceLimitsSqrt,
+            swapTypes,
+            txFee,
+            forwardGas,
+            false
+          )
+        )
+
+        if (isMainCell) {
+          innerMessage
+            .storeCoins(0)
+            .storeRef(Cell.EMPTY)
+        }
+
+        innerMessage.endCell()
+
+        return innerMessage
+
+    }
+
+    const multicallMessage = beginCell()
+      .storeUint(ContractOpcodes.POOLV3_SWAP, 32)
+      .storeAddress(jettonRouterWallet)
+      .storeUint(priceLimitSqrt, 160)
+      .storeCoins(0)
+      .storeAddress(recipient)
+      .storeMaybeRef(
+        getInnerMessage(isEmpty)
+      )
+      .endCell()
+
+    return multicallMessage
+
+  }
+
+  public static createSwapExactInMultihopMessage(
+    userJettonWallet: Address, // input jetton wallet attached to user
+    jettonPath: Address[], // path of jetton attached to router
+    recipient: Address,
+    amountIn: bigint,
+    minimumAmountsOut: bigint[],
+    priceLimitsSqrt: bigint[],
+    swapTypes: SwapType[],
+    txFee: bigint = this.gasUsage.SWAP_GAS, // 0.4
+    forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(4 * swapTypes.length),
+  ) {
+
+    const initialSwapType = swapTypes[0]
+    const hops = BigInt(swapTypes.length);
+
+    if (jettonPath.length === 1) return this.createSwapExactInMessage(
+      userJettonWallet,
+      jettonPath[0],
+      recipient,
+      amountIn,
+      minimumAmountsOut[0],
+      priceLimitsSqrt[0],
+      initialSwapType,
+      txFee,
+      forwardGas
+    )
+
+    const multihopRequest = PoolMessageManager.createMultihopHops(
+      jettonPath,
+      recipient,
+      amountIn,
+      minimumAmountsOut,
+      priceLimitsSqrt,
+      swapTypes,
+      txFee,
+      forwardGas,
+      true
+    )
+
+    switch (initialSwapType) {
+      case SwapType.TON_TO_JETTON:
+        const swapRequest = beginMessage(proxyWalletOpcodesV2.tonTransfer)
+          .storeCoins(amountIn) // ton amount
+          .storeAddress(recipient) // refund address
+          .storeUint(1, 1)
+          .storeRef(multihopRequest)
+          .endCell();
+
+        return {
+          to: Address.parse(pTON_ROUTER_WALLET),
+          value: amountIn + 2n * this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * 3n,
+          body: swapRequest,
+          sendMode: SendMode.PAY_GAS_SEPARATELY,
+        };
+
+      default:
+        const payload = JettonWallet.transferMessage(
+          amountIn,
+          Address.parse(ROUTER),
+          recipient,
+          null,
+          2n * this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * 1n,
+          multihopRequest
+        );
+
+        return {
+          to: userJettonWallet,
+          value: 2n * this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * 3n,
+          body: payload,
+          sendMode: SendMode.PAY_GAS_SEPARATELY,
+        };
+    }
+
+  }
+
   public static createSwapExactInMessage(
     userJettonWallet: Address, // input jetton wallet attached to user
     routerJettonWallet: Address, // output jetton wallet attached to router
@@ -903,4 +1047,86 @@ export class PoolMessageManager {
 
     return emulatedMessage;
   }
+
+  public static async createEmulatedSwapMultihopMessage(
+    userJettonWallet: Address, // input jetton wallet attached to user
+    jettonPath: Address[], // path of jetton attached to router
+    recipient: Address,
+    amountIn: bigint,
+    minimumAmountsOut: bigint[],
+    priceLimitsSqrt: bigint[],
+    swapTypes: SwapType[],
+    client?: Api<unknown>, // ton api client
+    wallet_public_key?: string,
+    walletVersion?: WalletVersion
+  ) {
+
+    const initialSwapType = swapTypes[0]
+    const hops = BigInt(swapTypes.length);
+
+    let txFee = this.gasUsage.SWAP_GAS * hops; // 0.4 * number of hops
+    const forwardGas = this.gasUsage.TRANSFER_GAS * (4n * (hops + 1n)); // 0.2 * number of hops + 1
+    
+    const message = this.createSwapExactInMultihopMessage(
+      userJettonWallet,
+      jettonPath,
+      recipient,
+      amountIn,
+      minimumAmountsOut,
+      priceLimitsSqrt,
+      swapTypes
+    );
+
+     /* emulate message */
+     if (client && wallet_public_key && walletVersion) {
+      try {
+        const emulation = await emulateMessage(
+          client,
+          [message],
+          recipient.toString(),
+          wallet_public_key,
+          walletVersion
+        );
+
+        if (emulation) {
+          /* tx gas */
+          const tonRevertedFromPool = BigInt(
+            emulation.event.actions.find(event => event.TonTransfer)
+              ?.TonTransfer?.amount || 0
+          );
+
+          const emulatedGas = BigInt(Math.abs(emulation.event.extra));
+
+          switch (initialSwapType) {
+            case SwapType.TON_TO_JETTON:
+              txFee = emulatedGas; // forward gas in the base created message
+              break;
+
+            // case SwapType.JETTON_TO_TON // Not sure does this exist in multihops
+
+            case SwapType.JETTON_TO_JETTON:
+              txFee = BigInt(Math.abs(emulation.event.extra));
+              break;
+          }
+          console.log('success emulation - ', emulation);
+        }
+      } catch (e) {
+        console.log('error emulation - ', e);
+      }
+    }
+
+    const emulatedMessage = {
+      message,
+      txFee,
+      forwardGas,
+      gasLimit:
+        initialSwapType === SwapType.TON_TO_JETTON
+          ? message.value - amountIn
+          : message.value,
+    };
+
+    return emulatedMessage;
+
+  }
+
 }
