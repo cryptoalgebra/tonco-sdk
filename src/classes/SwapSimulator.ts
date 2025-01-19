@@ -113,6 +113,11 @@ export class SwapSimulator {
   ): Promise<SwapState> {    
      // keep track of swap state
 
+    console.log(`swapInternal(): called`)
+    console.log(`zeroForOne       : ${zeroForOne}`)
+    console.log(`amountSpecified  : ${amountSpecified}`)
+    console.log(`sqrtPriceLimitX96: ${sqrtPriceLimitX96}`)
+
     const state: SwapState = {
       amountSpecifiedRemaining: amountSpecified,
       amountCalculated: BigInt(0),
@@ -144,13 +149,20 @@ export class SwapSimulator {
     }
 
     const exactInput: boolean = amountSpecified >= BigInt(0);
-  
+    console.log(`ExactInput: ${exactInput}`)
 
     // start swap while loop
     while (
       state.amountSpecifiedRemaining !== BigInt(0) &&
       state.sqrtPriceX96 !== sqrtPriceLimitX96
     ) {
+
+      console.log(` === Staring new swap iteration ==="`);
+      console.log(`   amountSpecifiedRemaining: `, state.amountSpecifiedRemaining)
+      console.log(`   current price: `, state.sqrtPriceX96 )
+      console.log(`   target Price : `, sqrtPriceLimitX96)
+      console.log(`   curent tick  : `, state.tick )
+
       const step: Partial<StepComputations> = {};
       step.sqrtPriceStartX96 = state.sqrtPriceX96;
 
@@ -160,10 +172,9 @@ export class SwapSimulator {
       [
         step.tickNext,
         step.initialized,
-      ] = await this.ticks.nextInitializedTickWithinOneWord(
+      ] = await this.ticks.nextInitializedTick(
         state.tick,
-        zeroForOne, // ?
-        this.tickSpacing
+        zeroForOne // ?        
       );
 
       if (step.tickNext < TickMath.MIN_TICK) {

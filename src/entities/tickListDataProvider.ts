@@ -23,6 +23,17 @@ export class TickListDataProvider implements TickDataProvider {
     return TickList.getTick(this.ticks, tick);
   }
 
+  async nextInitializedTick(
+    tick: number,
+    lte: boolean,
+  ): Promise<[number, boolean]> {
+    return TickList.nextInitializedTickIf(
+      this.ticks,
+      tick,
+      lte
+    );
+  }
+
   async nextInitializedTickWithinOneWord(
     tick: number,
     lte: boolean,

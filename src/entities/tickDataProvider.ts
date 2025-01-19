@@ -11,6 +11,16 @@ export interface TickDataProvider {
   getTick(tick: number): Promise<{ liquidityNet: BigintIsh }>;
 
   /**
+   * Return the next tick that is initialized 
+   * @param tick The current tick
+   * @param lte Whether the next tick should be lte the current tick
+   */
+  nextInitializedTick(
+    tick: number,
+    lte: boolean,
+  ): Promise<[number, boolean]>;
+
+  /**
    * Return the next tick that is initialized within a single word
    * @param tick The current tick
    * @param lte Whether the next tick should be lte the current tick
@@ -31,6 +41,13 @@ export class NoTickDataProvider implements TickDataProvider {
   private static ERROR_MESSAGE = 'No tick data provider was given';
 
   async getTick(_tick: number): Promise<{ liquidityNet: BigintIsh }> {
+    throw new Error(NoTickDataProvider.ERROR_MESSAGE);
+  }
+
+  async nextInitializedTick(
+    _tick: number,
+    _lte: boolean   
+  ): Promise<[number, boolean]> {
     throw new Error(NoTickDataProvider.ERROR_MESSAGE);
   }
 

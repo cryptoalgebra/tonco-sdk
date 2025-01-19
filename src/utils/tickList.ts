@@ -3,6 +3,7 @@ import invariant from 'tiny-invariant';
 import { ZERO } from '../constants/internalConstants';
 import { Tick } from '../entities/tick';
 import { isSorted } from './isSorted';
+import { TickMath } from './tickMath';
 
 function tickComparator(a: Tick, b: Tick) {
   return a.index - b.index;
@@ -78,6 +79,34 @@ export abstract class TickList {
     }
     const index = this.binarySearch(ticks, tick);
     return ticks[index + 1];
+  }
+
+
+  public static nextInitializedTickIf(
+    ticks: readonly Tick[],
+    tick: number,
+    lte: boolean
+  ): [number, boolean] {
+    if (lte) {
+      if (!TickList.isBelowSmallest(ticks, tick)) {
+        return [TickMath.MIN_TICK, false]
+      }
+      if (TickList.isAtOrAboveLargest(ticks, tick)) {
+        return [TickMath.MAX_TICK, false];
+      }
+      const index = this.binarySearch(ticks, tick);
+      return [ticks[index].index, true]
+    }
+
+    if (this.isAtOrAboveLargest(ticks, tick))
+    {
+      return [TickMath.MAX_TICK, false];
+    }
+    if (this.isBelowSmallest(ticks, tick)) {
+      return [TickMath.MIN_TICK, false];
+    }
+    const index = this.binarySearch(ticks, tick);
+    return [ticks[index + 1].index, true];
   }
 
   public static nextInitializedTickWithinOneWord(
