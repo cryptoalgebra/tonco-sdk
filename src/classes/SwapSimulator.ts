@@ -187,6 +187,9 @@ export class SwapSimulator {
         TickMath.getSqrtRatioAtTick(step.tickNext).toString()
       );
 
+      console.log(`   next tick  : `, step.tickNext, " i=", step.initialized)
+      console.log(`   next price  : `, step.sqrtPriceNextX96)
+
       let sqrtPriceLimitStep: bigint = (zeroForOne
       ? step.sqrtPriceNextX96 < sqrtPriceLimitX96
       : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
@@ -200,6 +203,11 @@ export class SwapSimulator {
         state.amountSpecifiedRemaining,
         BigInt(this.fee)
       );
+
+      console.log("stepResult sqrtPriceX96", stepResult[0].toString())
+      console.log("stepResult amountIn",     stepResult[1].toString())
+      console.log("stepResult amountOut",    stepResult[2].toString())
+      console.log("stepResult feeAmount",    stepResult[3].toString())
 
       state.sqrtPriceX96 = BigInt(stepResult[0].toString());
       step.amountIn = BigInt(stepResult[1].toString());
