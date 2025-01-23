@@ -3,6 +3,7 @@ import invariant from 'tiny-invariant';
 import { ZERO } from '../constants/internalConstants';
 import { Tick } from '../entities/tick';
 import { isSorted } from './isSorted';
+import { TickMath } from './tickMath';
 
 function tickComparator(a: Tick, b: Tick) {
   return a.index - b.index;
@@ -78,6 +79,39 @@ export abstract class TickList {
     }
     const index = this.binarySearch(ticks, tick);
     return ticks[index + 1];
+  }
+
+
+  public static nextInitializedTickIf(
+    ticks: readonly Tick[],
+    tick: number,
+    lte: boolean
+  ): [number, boolean] {
+
+    // console.log(`nextInitializedTickIf(_ len = ${ticks.length}, tick = ${tick}, lte = ${lte} ) called `)
+    
+
+    if (lte) {
+      if (TickList.isBelowSmallest(ticks, tick)) {
+        return [TickMath.MIN_TICK, false]
+      }
+      if (TickList.isAtOrAboveLargest(ticks, tick)) {
+        tick = ticks[ticks.length - 1].index + 1;
+      }
+      const index = this.binarySearch(ticks, tick);
+      return [ticks[index].index, true]
+    }
+
+    if (this.isAtOrAboveLargest(ticks, tick))
+    {
+      return [TickMath.MAX_TICK, false];
+    }
+    if (this.isBelowSmallest(ticks, tick)) {
+      tick = ticks[0].index;
+    }
+    const index = this.binarySearch(ticks, tick);
+    // console.log(`Binary Search returned: ${index}`)
+    return [ticks[index + 1].index, true];
   }
 
   public static nextInitializedTickWithinOneWord(

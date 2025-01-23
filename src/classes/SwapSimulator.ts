@@ -18,13 +18,13 @@ interface StepComputations {
   feeAmount: bigint;
 }
 
-interface SwapState {
-  amountSpecifiedRemaining: bigint,
-  amountCalculated: bigint,
-  sqrtPriceX96: bigint,
-  tick: number,
-  liquidity: bigint,
-};
+export interface SwapState {
+  amountSpecifiedRemaining: bigint;
+  amountCalculated: bigint;
+  sqrtPriceX96: bigint;
+  tick: number;
+  liquidity: bigint;
+}
 
 /**
  * Construct a swap simulator
@@ -73,7 +73,11 @@ export class SwapSimulator {
     inputAmount: bigint,
     sqrtPriceLimitX96?: bigint
   ): Promise<bigint> {
-    const newState = await this.swap(zeroForOne, inputAmount, sqrtPriceLimitX96);
+    const newState = await this.swap(
+      zeroForOne,
+      inputAmount,
+      sqrtPriceLimitX96
+    );
 
     return -newState.amountCalculated;
   }
@@ -110,8 +114,13 @@ export class SwapSimulator {
     zeroForOne: boolean,
     amountSpecified: bigint,
     sqrtPriceLimitX96?: bigint
-  ): Promise<SwapState> {    
-     // keep track of swap state
+  ): Promise<SwapState> {
+    // keep track of swap state
+
+    // console.log(`swapInternal(): called`)
+    // console.log(`zeroForOne       : ${zeroForOne}`)
+    // console.log(`amountSpecified  : ${amountSpecified}`)
+    // console.log(`sqrtPriceLimitX96: ${sqrtPriceLimitX96}`)
 
     const state: SwapState = {
       amountSpecifiedRemaining: amountSpecified,
@@ -144,26 +153,28 @@ export class SwapSimulator {
     }
 
     const exactInput: boolean = amountSpecified >= BigInt(0);
-  
+    // console.log(`ExactInput: ${exactInput}`)
 
     // start swap while loop
     while (
       state.amountSpecifiedRemaining !== BigInt(0) &&
       state.sqrtPriceX96 !== sqrtPriceLimitX96
     ) {
+      // console.log(` === Staring new swap iteration ==="`);
+      // console.log(`   amountSpecifiedRemaining: `, state.amountSpecifiedRemaining)
+      // console.log(`   current price: `, state.sqrtPriceX96 )
+      // console.log(`   target Price : `, sqrtPriceLimitX96)
+      // console.log(`   curent tick  : `, state.tick )
+
       const step: Partial<StepComputations> = {};
       step.sqrtPriceStartX96 = state.sqrtPriceX96;
 
       // because each iteration of the while loop rounds, we can't optimize this code (relative to the smart contract)
       // by simply traversing to the next available tick, we instead need to exactly replicate
       // tickBitmap.nextInitializedTickWithinOneWord
-      [
-        step.tickNext,
-        step.initialized,
-      ] = await this.ticks.nextInitializedTickWithinOneWord(
+      [step.tickNext, step.initialized] = await this.ticks.nextInitializedTick(
         state.tick,
-        zeroForOne, // ?
-        this.tickSpacing
+        zeroForOne // ?
       );
 
       if (step.tickNext < TickMath.MIN_TICK) {
@@ -175,6 +186,9 @@ export class SwapSimulator {
       step.sqrtPriceNextX96 = BigInt(
         TickMath.getSqrtRatioAtTick(step.tickNext).toString()
       );
+
+      // console.log(`   next tick  : `, step.tickNext, " i=", step.initialized)
+      // console.log(`   next price  : `, step.sqrtPriceNextX96)
 
       let sqrtPriceLimitStep: bigint = (zeroForOne
       ? step.sqrtPriceNextX96 < sqrtPriceLimitX96
@@ -189,6 +203,11 @@ export class SwapSimulator {
         state.amountSpecifiedRemaining,
         BigInt(this.fee)
       );
+
+      // console.log("stepResult sqrtPriceX96", stepResult[0].toString())
+      // console.log("stepResult amountIn",     stepResult[1].toString())
+      // console.log("stepResult amountOut",    stepResult[2].toString())
+      // console.log("stepResult feeAmount",    stepResult[3].toString())
 
       state.sqrtPriceX96 = BigInt(stepResult[0].toString());
       step.amountIn = BigInt(stepResult[1].toString());
