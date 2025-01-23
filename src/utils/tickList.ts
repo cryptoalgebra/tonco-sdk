@@ -88,7 +88,7 @@ export abstract class TickList {
     lte: boolean
   ): [number, boolean] {
 
-    console.log(`nextInitializedTickIf(_ len = ${ticks.length}, tick = ${tick}, lte = ${lte} ) called `)
+    // console.log(`nextInitializedTickIf(_ len = ${ticks.length}, tick = ${tick}, lte = ${lte} ) called `)
     
 
     if (lte) {
@@ -110,7 +110,7 @@ export abstract class TickList {
       tick = ticks[0].index;
     }
     const index = this.binarySearch(ticks, tick);
-    console.log(`Binary Search returned: ${index}`)
+    // console.log(`Binary Search returned: ${index}`)
     return [ticks[index + 1].index, true];
   }
 
