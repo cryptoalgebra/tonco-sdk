@@ -701,26 +701,36 @@ export class PoolMessageManager {
     amountIn: bigint,
     minimumAmountsOut: bigint[],
     priceLimitsSqrt: bigint[],
+    jettonsAreInOrder: boolean[],
     swapTypes: SwapType[],
     txFee: bigint = this.gasUsage.SWAP_GAS, // 0.4
     forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(4 * minimumAmountsOut.length), // TODO
-    isMainCell: boolean
+    isMainCell: boolean,
+    hops: bigint,
+    pathString: string
   ): any {
 
     if (!jettonPath.length) return null;
 
+    const isInOrder = jettonsAreInOrder.shift();
+
     const jettonRouterWallet = jettonPath.shift();
+
     const priceLimitSqrt = priceLimitsSqrt.shift();
     const minimumAmountOut = minimumAmountsOut.shift();
     const swapType = swapTypes.shift();
 
     const isEmpty = !jettonPath.length
+    const isPTON = jettonRouterWallet?.equals(Address.parse(pTON_ROUTER_WALLET))
 
-    const getInnerMessage = (isEmpty: boolean) => {
+    const getInnerMessage = (isEmpty: boolean, isPTON: boolean) => {
       if (isEmpty) return null
 
       const innerMessage = beginCell()
-        .storeAddress(Address.parse(ROUTER))
+        .storeAddress(isInOrder ? 
+          (isPTON ? jettonRouterWallet : Address.parse(ROUTER)) : 
+          recipient
+        )
         .storeCoins(this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * 2n)
         .storeRef(
           this.createMultihopHops(
@@ -729,17 +739,23 @@ export class PoolMessageManager {
             amountIn,
             minimumAmountsOut,
             priceLimitsSqrt,
+            jettonsAreInOrder,
             swapTypes,
             txFee,
             forwardGas,
-            false
+            false,
+            hops,
+            pathString
           )
         )
 
         if (isMainCell) {
           innerMessage
             .storeCoins(0)
-            .storeRef(Cell.EMPTY)
+            .storeRef(beginCell()
+            .storeUint(0, 32)
+            .storeStringTail(`Multihop | ${crypto.randomUUID()} | ${hops} | ${pathString}`)
+            .endCell())
         }
 
         innerMessage.endCell()
@@ -752,10 +768,13 @@ export class PoolMessageManager {
       .storeUint(ContractOpcodes.POOLV3_SWAP, 32)
       .storeAddress(jettonRouterWallet)
       .storeUint(priceLimitSqrt, 160)
-      .storeCoins(0)
-      .storeAddress(recipient)
+      .storeCoins(minimumAmountOut)
+      .storeAddress(isInOrder || jettonsAreInOrder.length === 0 ? 
+        recipient : 
+        (isPTON ? jettonRouterWallet : Address.parse(ROUTER))
+      )
       .storeMaybeRef(
-        getInnerMessage(isEmpty)
+        getInnerMessage(isEmpty, isPTON)
       )
       .endCell()
 
@@ -770,6 +789,7 @@ export class PoolMessageManager {
     amountIn: bigint,
     minimumAmountsOut: bigint[],
     priceLimitsSqrt: bigint[],
+    jettonsAreInOrder: boolean[],
     swapTypes: SwapType[],
     txFee: bigint = this.gasUsage.SWAP_GAS, // 0.4
     forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(4 * swapTypes.length),
@@ -777,6 +797,10 @@ export class PoolMessageManager {
 
     const initialSwapType = swapTypes[0]
     const hops = BigInt(swapTypes.length);
+    const pathString = [
+      userJettonWallet.toRawString(),
+      ...jettonPath.map(address => address.toRawString())
+    ].join('-')
 
     if (jettonPath.length === 1) return this.createSwapExactInMessage(
       userJettonWallet,
@@ -796,10 +820,13 @@ export class PoolMessageManager {
       amountIn,
       minimumAmountsOut,
       priceLimitsSqrt,
+      jettonsAreInOrder,
       swapTypes,
       txFee,
       forwardGas,
-      true
+      true,
+      hops,
+      pathString
     )
 
     switch (initialSwapType) {
@@ -824,13 +851,13 @@ export class PoolMessageManager {
           Address.parse(ROUTER),
           recipient,
           null,
-          2n * this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * 1n,
+          2n * this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * 4n,
           multihopRequest
         );
 
         return {
           to: userJettonWallet,
-          value: 2n * this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * 3n,
+          value: 2n * this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * 5n,
           body: payload,
           sendMode: SendMode.PAY_GAS_SEPARATELY,
         };
@@ -1055,6 +1082,7 @@ export class PoolMessageManager {
     amountIn: bigint,
     minimumAmountsOut: bigint[],
     priceLimitsSqrt: bigint[],
+    jettonsAreInOrder: boolean[],
     swapTypes: SwapType[],
     client?: Api<unknown>, // ton api client
     wallet_public_key?: string,
@@ -1074,6 +1102,7 @@ export class PoolMessageManager {
       amountIn,
       minimumAmountsOut,
       priceLimitsSqrt,
+      jettonsAreInOrder,
       swapTypes
     );
 
