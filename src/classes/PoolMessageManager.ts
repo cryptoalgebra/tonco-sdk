@@ -705,7 +705,9 @@ export class PoolMessageManager {
     swapTypes: SwapType[],
     txFee: bigint = this.gasUsage.SWAP_GAS, // 0.4
     forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(4 * minimumAmountsOut.length), // TODO
-    isMainCell: boolean
+    isMainCell: boolean,
+    hops: bigint,
+    pathString: string
   ): any {
 
     if (!jettonPath.length) return null;
@@ -741,14 +743,19 @@ export class PoolMessageManager {
             swapTypes,
             txFee,
             forwardGas,
-            false
+            false,
+            hops,
+            pathString
           )
         )
 
         if (isMainCell) {
           innerMessage
             .storeCoins(0)
-            .storeRef(Cell.EMPTY)
+            .storeRef(beginCell()
+            .storeUint(0, 32)
+            .storeStringTail(`Multihop | ${crypto.randomUUID()} | ${hops} | ${pathString}`)
+            .endCell())
         }
 
         innerMessage.endCell()
@@ -790,6 +797,10 @@ export class PoolMessageManager {
 
     const initialSwapType = swapTypes[0]
     const hops = BigInt(swapTypes.length);
+    const pathString = [
+      userJettonWallet.toRawString(),
+      ...jettonPath.map(address => address.toRawString())
+    ].join('-')
 
     if (jettonPath.length === 1) return this.createSwapExactInMessage(
       userJettonWallet,
@@ -813,7 +824,9 @@ export class PoolMessageManager {
       swapTypes,
       txFee,
       forwardGas,
-      true
+      true,
+      hops,
+      pathString
     )
 
     switch (initialSwapType) {
