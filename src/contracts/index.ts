@@ -7,3 +7,5 @@ export * from './AccountV3Contract';
 export * from './PoolFactoryContract';
 
 export * from './opCodes';
+
+export * from './farming';
