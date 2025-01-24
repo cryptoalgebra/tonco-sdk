@@ -7,6 +7,8 @@ declare global {
         PTON_MINTER: string;
         PTON_ROUTER: string;
         ROUTER_CODE: string;
+        FARMING_DISTRIBUTOR: string;
+        TONCO_MIGRATE: string;
       }
     }
   }
