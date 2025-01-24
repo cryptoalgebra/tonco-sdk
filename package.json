@@ -13,9 +13,13 @@
   },
   "scripts": {
     "start": "tsdx watch",
-    "build": "tsdx build",
+    "build:mainnet": "dotenv -e .env.local tsdx build",
+    "build:testnet": "dotenv -e .env.local.testnet tsdx build",
+    "prepare:mainnet": "yarn build:mainnet",
+    "prepare:testnet": "yarn build:testnet",
+    "publish:mainnet": "yarn prepare:mainnet && yarn publish --tag mainnet",
+    "publish:testnet": "yarn prepare:testnet && yarn publish --tag testnet",
     "lint": "tsdx lint",
-    "prepare": "tsdx build",
     "size": "size-limit",
     "analyze": "size-limit --why"
   },
@@ -50,11 +54,14 @@
   },
   "devDependencies": {
     "@size-limit/preset-small-lib": "^9.0.0",
+    "@types/node": "^22.10.10",
+    "dotenv-cli": "^8.0.0",
     "husky": "^8.0.3",
+    "rollup-plugin-dotenv": "^0.5.1",
     "size-limit": "^9.0.0",
     "tsdx": "^0.14.1",
     "tslib": "^2.6.2",
     "typescript": "^5.2.2"
   },
-  "version": "1.0.35"
+  "version": "1.0.35-test"
 }
