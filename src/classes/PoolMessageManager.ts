@@ -149,6 +149,7 @@ export class PoolMessageManager {
     recipient: Address,
     slippage: Percent = new Percent(1, 100), // 1 %
     queryId: number | bigint = 0,
+    referral: string = undefined,
     txFee: bigint = this.gasUsage.MINT_GAS, // 0.4
     forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(2) // 0.1 // 2 maximum transfers per 1 msg
   ): SenderArguments[] {
@@ -197,8 +198,18 @@ export class PoolMessageManager {
       .storeCoins(jetton1Amount)
       .storeUint(BigInt(position.liquidity.toString()), 128) // Liquidity. First transaction don't want actully to mint anything.
       .storeInt(BigInt(position.tickLower.toString()), 24) // Min tick.  Actually for the part 1 could be 0 it is ignored
-      .storeInt(BigInt(position.tickUpper.toString()), 24) // Max tick.  Actually for the part 1 could be 0 it is ignored
-      .endCell();
+      .storeInt(BigInt(position.tickUpper.toString()), 24); // Max tick.  Actually for the part 1 could be 0 it is ignored
+      
+    if (referral) {
+      mintRequest0.storeMaybeRef(
+        beginCell()
+          .storeUint(0, 32)
+          .storeStringTail(referral)
+        .endCell()
+      );
+    }
+
+    mintRequest0.endCell();
 
     mintRequest1 = beginCell()
       .storeUint(ContractOpcodes.POOLV3_FUND_ACCOUNT, 32) // Request to minting part 1
@@ -207,8 +218,18 @@ export class PoolMessageManager {
       .storeCoins(jetton0Amount)
       .storeUint(BigInt(position.liquidity.toString()), 128) // Liquidity to mint
       .storeInt(BigInt(position.tickLower.toString()), 24) // Min tick.
-      .storeInt(BigInt(position.tickUpper.toString()), 24) // Max tick.
-      .endCell();
+      .storeInt(BigInt(position.tickUpper.toString()), 24); // Max tick.
+
+    if (referral) {
+      mintRequest1.storeMaybeRef(
+        beginCell()
+          .storeUint(0, 32)
+          .storeStringTail(referral)
+        .endCell()
+      );
+    }
+  
+    mintRequest1.endCell();
 
     if (isJetton0TON) {
       mintRequest0 = beginCell()
@@ -293,6 +314,7 @@ export class PoolMessageManager {
     recipient: Address,
     slippage: Percent = new Percent(1, 100), // 1 %
     queryId: number | bigint = 0,
+    referral?: string,
     client?: Api<unknown>, // ton api client
     wallet_public_key?: string,
     walletVersion?: WalletVersion
@@ -308,7 +330,8 @@ export class PoolMessageManager {
       position,
       recipient,
       slippage,
-      queryId
+      queryId,
+      referral
     );
 
     /* emulate message */
