@@ -83,7 +83,7 @@ const jetton1 = new Jetton(
   'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
   6,
   'USD₮',
-  'Tether USD,
+  'Tether USD',
   'https://tether.to/images/logoCircle.png'
 )
 
