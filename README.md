@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="TONCO" src="https://app.tonco.io/tonco-logo.svg" width="360">
+  <a href="https://tonco.io/"><img alt="TONCO" src="https://app.tonco.io/tonco-logo.svg" width="360"></a>
 </p>
 
 <p align="center">
