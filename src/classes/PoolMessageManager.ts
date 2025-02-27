@@ -750,10 +750,7 @@ export class PoolMessageManager {
       if (isEmpty) return null
 
       const innerMessage = beginCell()
-        .storeAddress(isInOrder ? 
-          (isPTON ? jettonRouterWallet : Address.parse(ROUTER)) : 
-          recipient
-        )
+        .storeAddress(isPTON ? jettonRouterWallet : Address.parse(ROUTER))
         .storeCoins(this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * 2n)
         .storeRef(
           this.createMultihopHops(
@@ -790,12 +787,9 @@ export class PoolMessageManager {
     const multicallMessage = beginCell()
       .storeUint(ContractOpcodes.POOLV3_SWAP, 32)
       .storeAddress(jettonRouterWallet)
-      .storeUint(priceLimitSqrt, 160)
+      .storeUint(0, 160)
       .storeCoins(minimumAmountOut)
-      .storeAddress(isInOrder || jettonsAreInOrder.length === 0 ? 
-        recipient : 
-        (isPTON ? jettonRouterWallet : Address.parse(ROUTER))
-      )
+      .storeAddress(recipient)
       .storeMaybeRef(
         getInnerMessage(isEmpty, isPTON)
       )
