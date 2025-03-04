@@ -531,10 +531,9 @@ export class PoolMessageManager {
             )?.TonTransfer?.amount;
 
             txFee =
-              tonToBurn +
-              (txFee -
-                BigInt(tonRevertedFromPool || 0) -
-                (isOnlyTon ? -emulatedGas : emulatedGas));
+              txFee -
+              BigInt(tonRevertedFromPool || 0) -
+              (isOnlyTon ? -emulatedGas : emulatedGas);
 
             // forwardGas = this.gasUsage.BURN_GAS_SLIPPAGE * BigInt(2); // 0.1
           } else {
@@ -660,10 +659,7 @@ export class PoolMessageManager {
             amount: JettonAmount<Jetton>,
             mult: 1 | -1
           ) => {
-            return (
-              BigInt(amount.quotient.toString()) +
-              (txFee - tonRevertedFromPool - emulatedGas * BigInt(mult))
-            );
+            return txFee - tonRevertedFromPool - emulatedGas * BigInt(mult);
           };
 
           switch (collectType) {
@@ -787,7 +783,7 @@ export class PoolMessageManager {
     const multicallMessage = beginCell()
       .storeUint(ContractOpcodes.POOLV3_SWAP, 32)
       .storeAddress(jettonRouterWallet)
-      .storeUint(0, 160)
+      .storeUint(priceLimitSqrt, 160)
       .storeCoins(minimumAmountOut)
       .storeAddress(recipient)
       .storeMaybeRef(
