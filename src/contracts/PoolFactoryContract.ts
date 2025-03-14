@@ -1,7 +1,7 @@
-import { Address, beginCell, Builder, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from "@ton/core";
+import { Address, beginCell, Builder, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode, Slice } from "@ton/core";
 import { ContractOpcodes } from "./opCodes";
-import { ParseDataVisitor } from "../scripts/meta/parseDataVisitor";
-import { ContractMessageMeta, MetaMessage, StructureVisitor } from "../scripts/meta/structureVisitor";
+import { ContractMessageMeta, MetaMessage, StructureVisitor } from "./meta/structureVisitor";
+import { ParseDataVisitor } from "./meta/parseDataVisitor";
 
 
 export type PoolFactoryContractConfig = {    
@@ -9,7 +9,11 @@ export type PoolFactoryContractConfig = {
     routerAddress : Address,  
     tonPrice? : bigint,
 
-    privilegeAddress? : Address,    
+    privilegeAddress0? : Address,
+    privilegeAddress1? : Address,
+    
+    poolAdminAddress? : Address,    
+    poolControllerAddress? : Address,    
 
     orderCode : Cell,
     nftv3Content  : Cell,
@@ -18,21 +22,55 @@ export type PoolFactoryContractConfig = {
 
 
 export function poolFactoryContractConfigToCell(config: PoolFactoryContractConfig): Cell {
+
+    const privilegeAddress0 = config.privilegeAddress0  ?? config.adminAddress
+
     return beginCell()
         .storeAddress(config.adminAddress)
         .storeAddress(config.routerAddress)
         .storeCoins(config.tonPrice ?? 0)
 
-        .storeRef(config.orderCode)
-
-        .storeRef(config.nftv3Content)
-        .storeRef(config.nftv3itemContent)
-
         .storeRef( beginCell()
-            .storeAddress(config.privilegeAddress ?? config.adminAddress)
-        .endCell()
-        )
+            .storeRef(config.orderCode)
+            .storeRef(config.nftv3Content)
+            .storeRef(config.nftv3itemContent)
+        .endCell())
+        .storeRef( beginCell()
+            .storeAddress(privilegeAddress0)
+            .storeAddress(config.privilegeAddress1 ?? privilegeAddress0)            
+        .endCell())
+        .storeRef( beginCell()
+            .storeAddress(config.poolAdminAddress      ?? privilegeAddress0)
+            .storeAddress(config.poolControllerAddress ?? privilegeAddress0)            
+        .endCell())
     .endCell()
+}
+
+export function poolFactoryContractCellToConfig(data: Cell): PoolFactoryContractConfig {
+
+    let config : Partial<PoolFactoryContractConfig> = {}
+
+    const ds : Slice = data.beginParse()
+    config.adminAddress  = ds.loadAddress()
+    config.routerAddress = ds.loadAddress()
+    config.tonPrice      = ds.loadCoins()
+
+    const subcontacts : Slice = ds.loadRef().beginParse()
+        config.orderCode        = subcontacts.loadRef()
+        config.nftv3Content     = subcontacts.loadRef()
+        config.nftv3itemContent = subcontacts.loadRef()
+
+    const privilege : Slice = ds.loadRef().beginParse()
+        config.privilegeAddress0 = privilege.loadAddress()
+        config.privilegeAddress1 = privilege.loadAddress()
+
+
+    const poolsRoles : Slice = ds.loadRef().beginParse()
+        config.poolAdminAddress      = poolsRoles.loadAddress()
+        config.poolControllerAddress = poolsRoles.loadAddress()
+
+
+    return config as PoolFactoryContractConfig
 }
 
 export class PoolFactoryContract implements Contract {
@@ -184,13 +222,119 @@ export class PoolFactoryContract implements Contract {
         })
     }
 
+/*START_POOL_FACTORY_CHANGE_ADMIN*/ 
+    static factoryChangeAdminMessage(
+        admin : Address | null,
+        privilege_address0 : Address | null,
+        privilege_address1 : Address | null,
+    ) : Cell {
+        let body : Cell = beginCell()
+            .storeUint(ContractOpcodes.POOL_FACTORY_CHANGE_ADMIN, 32) // OP code
+            .storeUint(0, 64) // query_id
+            .storeAddress(admin        )
+            .storeAddress(privilege_address0 )
+            .storeAddress(privilege_address1 )
+        .endCell()
+        return body
+    }
+    
+    static unpackFactoryChangeAdminMessage( body : Cell ) : {
+        admin : Address | null,
+        privilege_address0 : Address | null,
+        privilege_address1 : Address | null,
+    }{
+        let s = body.beginParse()
+        const op       = s.loadUint(32)
+        if (op != ContractOpcodes.POOL_FACTORY_CHANGE_ADMIN) {
+            throw Error("Wrong opcode")
+        }
+        const query_id = s.loadUint(64)
+        const admin        = s.loadAddress()
+        const privilege_address0 = s.loadAddress()
+        const privilege_address1 = s.loadAddress()
+        return {admin, privilege_address0, privilege_address1}
+    }
+    
+    async sendFactoryChangeAdmin(provider: ContractProvider, via: Sender, value: bigint, 
+        admin : Address | null,
+        privilege_address0 : Address | null,
+        privilege_address1 : Address | null,
+    ) {
+        await provider.internal(via, { 
+            value, 
+            sendMode: SendMode.PAY_GAS_SEPARATELY, 
+            body: PoolFactoryContract.factoryChangeAdminMessage(admin, privilege_address0, privilege_address1)
+        })
+    } 
+/*END_POOL_FACTORY_CHANGE_ADMIN*/
+
+/*START_POOL_FACTORY_CHANGE_PARAMS*/
+    static factoryChangeParamsMessage(
+       router_address : Address | null,
+       pool_admin_address : Address | null,
+       pool_controller_address : Address | null,
+       nftv3_content : Cell,
+       nftv3item_content : Cell,
+    ) : Cell {
+        let body : Cell = beginCell()
+            .storeUint(ContractOpcodes.POOL_FACTORY_CHANGE_PARAMS, 32) // OP code
+            .storeUint(0, 64) // query_id
+            .storeAddress(router_address )
+            .storeAddress(pool_admin_address )
+            .storeAddress(pool_controller_address )
+            .storeRef(nftv3_content )
+            .storeRef(nftv3item_content )
+        .endCell()
+        return body
+    }
+    
+    static unpackFactoryChangeParamsMessage( body : Cell ) : {
+       router_address : Address | null,
+       pool_admin_address : Address | null,
+       pool_controller_address : Address | null,
+       nftv3_content : Cell,
+       nftv3item_content : Cell,
+    }{
+        let s = body.beginParse()
+        const op       = s.loadUint(32)
+        if (op != ContractOpcodes.POOL_FACTORY_CHANGE_PARAMS) {
+            throw Error("Wrong opcode")
+        }
+        const query_id = s.loadUint(64)
+        const router_address = s.loadAddress()
+        const pool_admin_address = s.loadAddress()
+        const pool_controller_address = s.loadAddress()
+        const nftv3_content = s.loadRef()
+        const nftv3item_content = s.loadRef()
+        return {router_address, pool_admin_address, pool_controller_address, nftv3_content, nftv3item_content}
+    }
+    
+    async sendFactoryChangeParams(provider: ContractProvider, via: Sender, value: bigint, 
+       router_address : Address | null,
+       pool_admin_address : Address | null,
+       pool_controller_address : Address | null,
+       nftv3_content : Cell,
+       nftv3item_content : Cell,
+    ) {
+        await provider.internal(via, { 
+            value, 
+            sendMode: SendMode.PAY_GAS_SEPARATELY, 
+            body: PoolFactoryContract.factoryChangeParamsMessage(router_address, pool_admin_address, pool_controller_address, nftv3_content, nftv3item_content)
+         })
+    }
+/*END_POOL_FACTORY_CHANGE_PARAMS*/
+
     /* Getters */
     async getPoolFactoryData(provider: ContractProvider) {
         const { stack } = await provider.get("getPoolFactoryData", []);
         return {
-            admin_address     : stack.readAddress(),
-            router_address    : stack.readAddress(),
-            privilege_address : stack.readAddress(),
+            admin_address      : stack.readAddress(),
+            router_address     : stack.readAddress(),
+            privilege_address0 : stack.readAddress(),
+            privilege_address1 : stack.readAddress(),
+
+            pool_admin_address      : stack.readAddress(), 
+            pool_controller_address : stack.readAddress(),
 
             ton_price         : stack.readBigNumber(),
             nftv3_content     : stack.readCell(), 
@@ -252,7 +396,40 @@ export class PoolFactoryContract implements Contract {
             visitor.visitField({ name:`jetton1Minter`,    type:`Address`, size:267, meta:"" ,    comment: "Minter address of the second jetton"})
             visitor.leaveCell({})
         }
-    }    
+    },
+    {
+        opcode : ContractOpcodes.POOL_FACTORY_CHANGE_ADMIN,
+        name : "POOL_FACTORY_CHANGE_ADMIN",
+        description : "Change params of the pool factory that affect the pool factory permissions",
+
+        acceptor : (visitor: StructureVisitor) => {
+            visitor.visitField({ name:`op`,               type:`Uint`,    size:32,  meta:"op",   comment: ""})    
+            visitor.visitField({ name:`query_id`,         type:`Uint`,    size:64,  meta:""  ,   comment : "queryid as of the TON documentation"}) 
+
+            visitor.visitField({ name:`admin`,              type:`Address`, size:267, meta:"Maybe" ,    comment: "Admin of the Pool Factory"})
+            visitor.visitField({ name:`privilege_address0`, type:`Address`, size:267, meta:"Maybe" ,    comment: "Privilege address that may create pool in a locked state"})
+            visitor.visitField({ name:`privilege_address1`, type:`Address`, size:267, meta:"Maybe" ,    comment: "Privilege address that may create pool in a locked state"})
+        }
+    },
+    {
+        opcode : ContractOpcodes.POOL_FACTORY_CHANGE_PARAMS,
+        name : "POOL_FACTORY_CHANGE_PARAMS",
+        description : "Change params of the pool factory that affect the pool creation",
+
+        acceptor : (visitor: StructureVisitor) => {
+            visitor.visitField({ name:`op`,               type:`Uint`,    size:32,  meta:"op",   comment: ""})    
+            visitor.visitField({ name:`query_id`,         type:`Uint`,    size:64,  meta:""  ,   comment : "queryid as of the TON documentation"}) 
+
+            visitor.visitField({ name:`router_address`,          type:`Address`, size:267, meta:"Maybe" ,    comment: "Admin of the Pool Factory"})
+            visitor.visitField({ name:`pool_admin_address`,      type:`Address`, size:267, meta:"Maybe" ,    comment: "Privilege address that may create pool in a locked state"})
+            visitor.visitField({ name:`pool_controller_address`, type:`Address`, size:267, meta:"Maybe" ,    comment: "Privilege address that may create pool in a locked state"})
+
+            visitor.visitField({ name:`nftv3_content`,          type:`Cell`, size:0, meta:"" ,    comment: ""})
+            visitor.visitField({ name:`nftv3item_content`,      type:`Cell`, size:0, meta:"" ,    comment: ""})
+
+        }
+
+    }   
     ]
     /** 
     *  Debug methods to parse the message inputs

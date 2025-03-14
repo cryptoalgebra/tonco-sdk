@@ -1,7 +1,8 @@
 import { Address, beginCell, Builder, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode, toNano } from "@ton/core";
 import { ContractOpcodes } from "./opCodes";
-import { ContractMessageMeta, MetaMessage, StructureVisitor } from "../scripts/meta/structureVisitor";
-import { ParseDataVisitor } from "../scripts/meta/parseDataVisitor";
+import { ContractMessageMeta, MetaMessage, StructureVisitor } from "./meta/structureVisitor";
+import { ParseDataVisitor } from "./meta/parseDataVisitor";
+
 
 /** Initial data structures and settings **/
 // This is outdated

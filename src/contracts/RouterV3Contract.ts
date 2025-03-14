@@ -1,12 +1,11 @@
 import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode, Slice } from "@ton/core";
-import { ContractOpcodes, OpcodesLookup } from "./opCodes";
+import { ContractErrors, ContractOpcodes, OpcodesLookup } from "./opCodes";
 import { nftContentPackedDefault, nftItemContentPackedDefault } from "./PoolV3Contract";
 import { FEE_DENOMINATOR, IMPOSSIBLE_FEE } from "./frontmath/frontMath";
 import { BLACK_HOLE_ADDRESS } from "./tonUtils";
-import { ContractMessageMeta, MetaMessage, StructureVisitor } from "../scripts/meta/structureVisitor";
-import { ContractErrors } from "./opCodes";
-import { ParseDataVisitor } from "../scripts/meta/parseDataVisitor";
-import { HighloadWalletV3Config, highloadWalletV3ConfigToCell } from "./highload/HighloadWalletV3";
+import { ContractMessageMeta, MetaMessage, StructureVisitor } from "./meta/structureVisitor";
+import { ParseDataVisitor } from "./meta/parseDataVisitor";
+
 
 
 /** Initial data structures and settings **/
@@ -25,35 +24,18 @@ export type RouterV3ContractConfig = {
 
     timelockDelay? : bigint;
 
-    vault? : {
+    /*vault? : {
         jetton0_wallet : Address,
         jetton1_wallet : Address,        
         wallet : HighloadWalletV3Config
-    }
+    }*/
 
     nonce? : bigint;
 }
 
 
 export function routerv3ContractConfigToCell(config: RouterV3ContractConfig): Cell {
-
-    
-    let vaultCell = null
-    if (config.vault !== undefined) { 
-        //console.log("TRACE JETTON WALLET: ", config.vault.jetton0_wallet)
-        //console.log("TRACE JETTON WALLET: ", config.vault.jetton1_wallet)
-        let jw0 : Address = BLACK_HOLE_ADDRESS
-        let jw1 : Address = BLACK_HOLE_ADDRESS
-
-        vaultCell = beginCell()
-            .storeAddress(jw0)
-            .storeAddress(jw1)
-            .storeCoins(0n)
-            .storeCoins(0n)
-            .storeRef(highloadWalletV3ConfigToCell(config.vault.wallet))
-        .endCell()
-    }
-
+ 
     return beginCell()
         .storeAddress(config.adminAddress)
         .storeAddress(config.poolAdminAddress ?? config.adminAddress) 
@@ -74,7 +56,7 @@ export function routerv3ContractConfigToCell(config: RouterV3ContractConfig): Ce
             .storeUint(config.timelockDelay ?? TIMELOCK_DELAY_DEFAULT, 64)   // timelock Delay
             .storeUint(0,3)   // 3 maybe refs for active timelocks
         .endCell())
-        .storeMaybeRef(vaultCell)
+        //.storeMaybeRef(vaultCell)
         .storeUint(config.nonce ?? 0, 64)
     .endCell()    
 }
@@ -391,6 +373,7 @@ export class RouterV3Contract implements Contract {
     static changeRouterParamMessage(opts : {
         newPoolAdmin? : Address,
         newPoolFactory? : Address,
+        newProxyTonWallet? : Address
      //   newFlags? : bigint
     } ) : Cell {
         return beginCell()
@@ -399,13 +382,16 @@ export class RouterV3Contract implements Contract {
             .storeUint(opts.newPoolFactory ? 1 : 0, 1)
             .storeAddress(opts.newPoolFactory ?? BLACK_HOLE_ADDRESS)
             .storeUint(opts.newPoolAdmin ? 1 : 0, 1)
-            .storeAddress(opts.newPoolAdmin ?? BLACK_HOLE_ADDRESS)            
+            .storeAddress(opts.newPoolAdmin ?? BLACK_HOLE_ADDRESS)
+            .storeUint(opts.newProxyTonWallet ? 1 : 0, 1)
+            .storeAddress(opts.newProxyTonWallet ?? BLACK_HOLE_ADDRESS)
         .endCell();
     }
 
     static unpackChangeRouterParamMessage( body :Cell) : {
         newPoolAdmin? : Address        
         newPoolFactory? : Address
+        newProxyTonWallet? : Address
     }
     {
         let s = body.beginParse()
@@ -421,14 +407,19 @@ export class RouterV3Contract implements Contract {
         const hasPoolAdmin = s.loadBit()
         const newPoolAdminV = s.loadAddress()
         const newPoolAdmin = hasPoolAdmin ? newPoolAdminV : undefined
+
+        const hasProxyTonWallet = s.loadBit()
+        const newProxyTonWalletV = s.loadAddress()
+        const newProxyTonWallet = hasProxyTonWallet ? newProxyTonWalletV : undefined
         
-        return {newPoolAdmin, newPoolFactory}
+        return {newPoolAdmin, newPoolFactory, newProxyTonWallet}
     }
 
     async sendChangeRouterParams(provider: ContractProvider, sender: Sender, value: bigint, 
         opts : {
-            newPoolAdmin? : Address        
-            newPoolFactory? : Address           
+            newPoolAdmin? : Address,
+            newPoolFactory? : Address,
+            newProxyTonWallet? : Address
         }
     ) {
         const msg_body = RouterV3Contract.changeRouterParamMessage(opts)

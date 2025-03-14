@@ -1,7 +1,8 @@
 import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from "@ton/core";
 import { ContractOpcodes, } from "./opCodes";
-import { ContractMessageMeta, MetaMessage, StructureVisitor } from "../scripts/meta/structureVisitor";
-import { ParseDataVisitor } from "../scripts/meta/parseDataVisitor";
+import { ContractMessageMeta, MetaMessage, StructureVisitor } from "./meta/structureVisitor";
+import { ParseDataVisitor } from "./meta/parseDataVisitor";
+
 
 /** Initial data structures and settings **/
 export type AccountV3ContractConfig = {    
@@ -17,6 +18,23 @@ export type AccountV3ContractConfig = {
   
 export function accountv3ContractConfigToCell(config: AccountV3ContractConfig): Cell 
 {
+ /* let vaultCell = null
+    if (config.vault !== undefined) { 
+        //console.log("TRACE JETTON WALLET: ", config.vault.jetton0_wallet)
+        //console.log("TRACE JETTON WALLET: ", config.vault.jetton1_wallet)
+        let jw0 : Address = BLACK_HOLE_ADDRESS
+        let jw1 : Address = BLACK_HOLE_ADDRESS
+
+        vaultCell = beginCell()
+            .storeAddress(jw0)
+            .storeAddress(jw1)
+            .storeCoins(0n)
+            .storeCoins(0n)
+            .storeRef(highloadWalletV3ConfigToCell(config.vault.wallet))
+        .endCell()
+    }*/
+
+
     return beginCell()
         .storeAddress(config.user)
         .storeAddress(config.pool)

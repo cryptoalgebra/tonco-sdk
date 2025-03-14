@@ -3,8 +3,9 @@ import { ContractOpcodes } from "./opCodes";
 import { packJettonOnchainMetadata} from "./common/jettonContent";
 import { BLACK_HOLE_ADDRESS } from "./tonUtils";
 import { FEE_DENOMINATOR, IMPOSSIBLE_FEE, MaxUint120, MaxUint128, TickMath } from "./frontmath/frontMath";
-import { ContractMessageMeta, MetaMessage, StructureVisitor } from "../scripts/meta/structureVisitor";
-import { ParseDataVisitor } from "../scripts/meta/parseDataVisitor";
+import { ContractMessageMeta, MetaMessage, StructureVisitor } from "./meta/structureVisitor";
+import { ParseDataVisitor } from "./meta/parseDataVisitor";
+
  
 
 /** Initial data structures and settings **/
