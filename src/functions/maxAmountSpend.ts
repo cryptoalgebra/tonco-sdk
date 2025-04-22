@@ -3,6 +3,7 @@ import JSBI from 'jsbi';
 import { JettonAmount } from '../entities/JettonAmount';
 import { Jetton } from '../entities/Jetton';
 import { pTON_MINTER } from '../constants/addresses';
+import { RouterVersion } from '../types/RouterVersion';
 
 const MIN_NATIVE_CURRENCY_FOR_GAS: JSBI = JSBI.multiply(
   JSBI.exponentiate(JSBI.BigInt(10), JSBI.BigInt(7)),
@@ -18,9 +19,13 @@ export function maxAmountSpend(
 ): JettonAmount<Jetton> | undefined {
   if (!currencyAmount) return undefined;
 
-  const isNative = Address.parse(currencyAmount.jetton.address).equals(
-    Address.parse(pTON_MINTER)
-  );
+  const isNative =
+    Address.parse(currencyAmount.jetton.address).equals(
+      Address.parse(pTON_MINTER[RouterVersion.v1])
+    ) ||
+    Address.parse(currencyAmount.jetton.address).equals(
+      Address.parse(pTON_MINTER[RouterVersion.v2])
+    );
 
   if (isNative) {
     if (

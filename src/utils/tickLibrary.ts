@@ -1,5 +1,5 @@
 import JSBI from 'jsbi';
-import { NumberedTickInfo } from '../contracts';
+import { NumberedTickInfo } from '../contracts/v1/index';
 import { ZERO } from '../constants';
 
 const Q256 = JSBI.exponentiate(JSBI.BigInt(2), JSBI.BigInt(256));

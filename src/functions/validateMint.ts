@@ -1,4 +1,4 @@
-import { NumberedTickInfo } from '../contracts';
+import { NumberedTickInfo } from '../contracts/v1';
 
 export function validateMint(
   mintRequest: {

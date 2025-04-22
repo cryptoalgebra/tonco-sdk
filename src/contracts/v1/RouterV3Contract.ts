@@ -14,7 +14,7 @@ import {
   nftContentPackedDefault,
   nftItemContentPackedDefault,
 } from './PoolV3Contract';
-import { BLACK_HOLE_ADDRESS, IMPOSSIBLE_FEE } from '../constants';
+import { BLACK_HOLE_ADDRESS, IMPOSSIBLE_FEE } from '../../constants';
 
 /** Initial data structures and settings **/
 export const TIMELOCK_DELAY_DEFAULT: bigint =

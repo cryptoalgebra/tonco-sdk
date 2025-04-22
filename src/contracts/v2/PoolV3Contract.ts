@@ -9,10 +9,11 @@ import {
   ContractProvider,
   Sender,
   SendMode,
+  Slice,
 } from '@ton/core';
 import { ContractOpcodes } from './opCodes';
-import { packJettonOnchainMetadata } from './common/jettonContent';
-import { BLACK_HOLE_ADDRESS, IMPOSSIBLE_FEE } from '../constants';
+import { packJettonOnchainMetadata } from '../common/jettonContent';
+import { BLACK_HOLE_ADDRESS, IMPOSSIBLE_FEE } from '../../constants';
 
 export interface PoolStateAndConfiguration {
   router_address: Address;
@@ -42,16 +43,21 @@ export interface PoolStateAndConfiguration {
   seqno?: bigint;
 }
 
-/** Inital data structures and settings **/
+/** Initial data structures and settings **/
 export type PoolV3ContractConfig = {
   router_address: Address;
   admin_address?: Address;
+  controller_address?: Address;
+  arbiter_address?: Address;
 
   lp_fee_base?: number;
   protocol_fee?: number;
 
   jetton0_wallet: Address;
   jetton1_wallet: Address;
+
+  jetton0_minter?: Address;
+  jetton1_minter?: Address;
 
   tick_spacing?: number;
 
@@ -61,11 +67,25 @@ export type PoolV3ContractConfig = {
   liquidity?: bigint;
   lp_fee_current?: number;
 
+  ticks?: Cell | { tick: number; info: TickInfoWrapper }[];
+
   accountv3_code: Cell;
   position_nftv3_code: Cell;
 
   nftContent?: Cell;
   nftItemContent?: Cell;
+
+  ticks_occupied?: number;
+  nftv3item_counter?: bigint;
+  nftv3items_active?: bigint;
+
+  feeGrowthGlobal0X128?: bigint;
+  feeGrowthGlobal1X128?: bigint;
+  collectedProtocolFee0?: bigint;
+  collectedProtocolFee1?: bigint;
+
+  reserve0?: bigint;
+  reserve1?: bigint;
 };
 
 export class TickInfoWrapper {
@@ -75,6 +95,60 @@ export class TickInfoWrapper {
     public outerFeeGrowth0Token: bigint = BigInt(0),
     public outerFeeGrowth1Token: bigint = BigInt(0)
   ) {}
+}
+
+export function poolv3ContractCellToConfig(config: Cell): PoolV3ContractConfig {
+  let result: Partial<PoolV3ContractConfig> = {};
+
+  let ds: Slice = config.beginParse();
+
+  result.router_address = ds.loadAddress();
+  result.lp_fee_base = ds.loadUint(16);
+  result.protocol_fee = ds.loadUint(16);
+  result.lp_fee_current = ds.loadUint(16);
+  result.jetton0_wallet = ds.loadAddress();
+  result.jetton1_wallet = ds.loadAddress();
+  result.tick_spacing = ds.loadUint(24);
+  let dummy = ds.loadUint(64);
+
+  let feeCell = ds.loadRef();
+  let feeSlice = feeCell.beginParse();
+  result.feeGrowthGlobal0X128 = feeSlice.loadUintBig(256); // poolv3::feeGrowthGlobal0X128
+  result.feeGrowthGlobal1X128 = feeSlice.loadUintBig(256); // poolv3::feeGrowthGlobal1X128
+  result.collectedProtocolFee0 = feeSlice.loadUintBig(128); // poolv3::collectedProtocolFee0
+  result.collectedProtocolFee1 = feeSlice.loadUintBig(128); // poolv3::collectedProtocolFee1
+  result.reserve0 = feeSlice.loadCoins(); // poolv3::reserve0
+  result.reserve1 = feeSlice.loadCoins(); // poolv3::reserve1
+
+  let stateCell = ds.loadRef();
+  let stateSlice = stateCell.beginParse();
+  result.pool_active = stateSlice.loadBoolean();
+  result.tick = stateSlice.loadInt(24);
+  result.price_sqrt = stateSlice.loadUintBig(160);
+  result.liquidity = stateSlice.loadUintBig(128);
+
+  result.ticks_occupied = stateSlice.loadUint(24); // Occupied ticks
+  result.nftv3item_counter = stateSlice.loadUintBig(64); // NFT Inital counter
+  result.nftv3items_active = stateSlice.loadUintBig(64); // NFT Active counter
+
+  result.admin_address = stateSlice.loadAddress();
+  result.controller_address = stateSlice.loadAddress();
+
+  let addressCell = stateSlice.loadRef();
+  let addressSlice = addressCell.beginParse();
+  result.jetton0_minter = addressSlice.loadAddress();
+  result.jetton1_minter = addressSlice.loadAddress();
+  result.arbiter_address = addressSlice.loadAddress();
+
+  result.ticks = ds.loadRef();
+  let subcodesCell = ds.loadRef();
+  let subcodesSlice = subcodesCell.beginParse();
+  result.accountv3_code = subcodesSlice.loadRef();
+  result.position_nftv3_code = subcodesSlice.loadRef();
+  result.nftContent = subcodesSlice.loadRef();
+  result.nftItemContent = subcodesSlice.loadRef();
+
+  return result as PoolV3ContractConfig;
 }
 
 const DictionaryTickInfo: DictionaryValue<TickInfoWrapper> = {

@@ -1,5 +1,5 @@
 import { Address } from '@ton/core';
-import { ADDRESS_ZERO } from '../constants';
+import { ADDRESS_ZERO } from '../../constants';
 
 export type ContractMessageMeta = {
   name: string;

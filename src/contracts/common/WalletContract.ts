@@ -5,7 +5,6 @@ import {
   WalletContractV4,
   WalletContractV5R1,
 } from '@ton/ton';
-import { WalletVersion } from '../types/WalletVersion';
 import {
   WalletV3SendArgsSignable,
   WalletV3SendArgsSigned,
@@ -14,6 +13,7 @@ import {
   Wallet4SendArgsSignable,
   Wallet4SendArgsSigned,
 } from '@ton/ton/dist/wallets/WalletContractV4';
+import { WalletVersion } from '../../types';
 
 // function overloading
 interface IWalletContract {
