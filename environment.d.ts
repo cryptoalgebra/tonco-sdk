@@ -9,11 +9,11 @@ declare global {
       ROUTER_CODE: string;
       FARMING_DISTRIBUTOR: string;
       TONCO_MIGRATE: string;
-      ROUTER_V2: string;
-      POOL_FACTORY_V2: string;
-      PTON_MINTER_V2: string;
-      PTON_ROUTER_V2: string;
-      ROUTER_CODE_V2: string;
+      ROUTER_V1_5: string;
+      POOL_FACTORY_V1_5: string;
+      PTON_MINTER_V1_5: string;
+      PTON_ROUTER_V1_5: string;
+      ROUTER_CODE_V1_5: string;
     }
   }
 }

@@ -24,7 +24,7 @@ import { proxyWalletOpcodesV2 } from '../contracts/common/PTonWalletV2';
 import { emulateMessage } from '../functions/emulateMessage';
 import { WalletVersion } from '../types/WalletVersion';
 import { PoolContract, PoolFactoryContract } from '../contracts';
-import { RouterVersion } from '../types/RouterVersion';
+import { DEX_VERSION } from '../types/DexVersion';
 
 export enum SwapType {
   TON_TO_JETTON = 0,
@@ -65,9 +65,9 @@ export class PoolMessageManager {
     settings: bigint,
     jetton0Wallet: Address,
     jetton1Wallet: Address,
-    routerVersion: RouterVersion = RouterVersion.v1
+    dexVersion: DEX_VERSION = DEX_VERSION.v1
   ): SenderArguments {
-    const payload = PoolFactoryContract[routerVersion].deployPoolMessage(
+    const payload = PoolFactoryContract[dexVersion].deployPoolMessage(
       jetton0Minter,
       jetton1Minter,
       sqrtPriceX96,
@@ -78,9 +78,9 @@ export class PoolMessageManager {
 
     const message = {
       to:
-        routerVersion === RouterVersion.v2
-          ? Address.parse(POOL_FACTORY[RouterVersion.v2])
-          : Address.parse(POOL_FACTORY[RouterVersion.v1]),
+        dexVersion === DEX_VERSION['v1.5']
+          ? Address.parse(POOL_FACTORY[DEX_VERSION['v1.5']])
+          : Address.parse(POOL_FACTORY[DEX_VERSION.v1]),
       value: this.gasUsage.DEPLOY_POOL_GAS,
       body: payload,
     };
@@ -98,7 +98,7 @@ export class PoolMessageManager {
     slippage: Percent = new Percent(1, 100), // 1 %
     queryId: number | bigint = 0,
     referral: string | undefined = undefined,
-    routerVersion: RouterVersion = RouterVersion.v1,
+    dexVersion: DEX_VERSION = DEX_VERSION.v1,
     txFee: bigint = this.gasUsage.MINT_GAS, // 0.4
     forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(2) // 0.1 // 2 maximum transfers per 1 msg
   ): SenderArguments[] {
@@ -108,7 +108,7 @@ export class PoolMessageManager {
     const messages = [];
 
     const { amount0, amount1 } = position.mintAmounts;
-    const isSorted = PoolContract[routerVersion].orderJettonId(
+    const isSorted = PoolContract[dexVersion].orderJettonId(
       routerJetton0Wallet,
       routerJetton1Wallet
     );
@@ -131,10 +131,10 @@ export class PoolMessageManager {
     );
 
     const isJetton0TON = routerJetton0Wallet.equals(
-      Address.parse(pTON_ROUTER_WALLET[routerVersion])
+      Address.parse(pTON_ROUTER_WALLET[dexVersion])
     );
     const isJetton1TON = routerJetton1Wallet.equals(
-      Address.parse(pTON_ROUTER_WALLET[routerVersion])
+      Address.parse(pTON_ROUTER_WALLET[dexVersion])
     );
 
     let mintRequest0;
@@ -205,7 +205,7 @@ export class PoolMessageManager {
 
     const payload0 = JettonWallet.transferMessage(
       amount0WithSlippage,
-      Address.parse(ROUTER[routerVersion]),
+      Address.parse(ROUTER[dexVersion]),
       recipient,
       null,
       forwardGas, // 0.1
@@ -215,7 +215,7 @@ export class PoolMessageManager {
 
     const payload1 = JettonWallet.transferMessage(
       amount1WithSlippage,
-      Address.parse(ROUTER[routerVersion]),
+      Address.parse(ROUTER[dexVersion]),
       recipient,
       null,
       forwardGas, // 0.1
@@ -225,7 +225,7 @@ export class PoolMessageManager {
 
     if (isJetton1TON && amount1WithSlippage > BigInt(0)) {
       messages.push({
-        to: Address.parse(pTON_ROUTER_WALLET[routerVersion]),
+        to: Address.parse(pTON_ROUTER_WALLET[dexVersion]),
         value: amount1WithSlippage + mintPartGas + forwardGas, // ton with slippage + 0.2 + 0.1
         body: mintRequest1 as Cell,
       });
@@ -239,7 +239,7 @@ export class PoolMessageManager {
 
     if (isJetton0TON && amount0WithSlippage > BigInt(0)) {
       messages.push({
-        to: Address.parse(pTON_ROUTER_WALLET[routerVersion]),
+        to: Address.parse(pTON_ROUTER_WALLET[dexVersion]),
         value: amount0WithSlippage + mintPartGas + forwardGas, // ton with slippage + 0.2 + 0.1
         body: mintRequest0 as Cell,
       });
@@ -267,7 +267,7 @@ export class PoolMessageManager {
     client?: Api<unknown>, // ton api client
     wallet_public_key?: string,
     walletVersion?: WalletVersion,
-    routerVersion: RouterVersion = RouterVersion.v1
+    dexVersion: DEX_VERSION = DEX_VERSION.v1
   ) {
     let txFee = this.gasUsage.MINT_GAS; // 0.4
 
@@ -281,7 +281,7 @@ export class PoolMessageManager {
       slippage,
       queryId,
       referral,
-      routerVersion
+      dexVersion
     );
 
     /* emulate message */
@@ -475,7 +475,7 @@ export class PoolMessageManager {
     isMainCell: boolean,
     hops: bigint,
     pathString: string,
-    routerVersion: RouterVersion = RouterVersion.v1
+    dexVersion: DEX_VERSION = DEX_VERSION.v1
   ) {
     if (!jettonPath.length) return new Cell();
 
@@ -486,7 +486,7 @@ export class PoolMessageManager {
 
     const isEmpty = !jettonPath.length;
     const isPTON = jettonRouterWallet?.equals(
-      Address.parse(pTON_ROUTER_WALLET[routerVersion])
+      Address.parse(pTON_ROUTER_WALLET[dexVersion])
     );
 
     const getInnerMessage = (isEmpty: boolean, isPTON: boolean) => {
@@ -494,7 +494,7 @@ export class PoolMessageManager {
 
       const innerMessage = beginCell()
         .storeAddress(
-          isPTON ? jettonRouterWallet : Address.parse(ROUTER[routerVersion])
+          isPTON ? jettonRouterWallet : Address.parse(ROUTER[dexVersion])
         )
         .storeCoins(
           this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * BigInt(2)
@@ -553,7 +553,7 @@ export class PoolMessageManager {
     priceLimitsSqrt: bigint[],
     jettonsAreInOrder: boolean[],
     swapTypes: SwapType[],
-    routerVersion: RouterVersion = RouterVersion.v1,
+    dexVersion: DEX_VERSION = DEX_VERSION.v1,
     txFee: bigint = this.gasUsage.SWAP_GAS, // 0.4
     forwardGas: bigint = this.gasUsage.TRANSFER_GAS *
       BigInt(4 * swapTypes.length)
@@ -574,7 +574,7 @@ export class PoolMessageManager {
         minimumAmountsOut[0],
         priceLimitsSqrt[0],
         initialSwapType,
-        routerVersion,
+        dexVersion,
         txFee,
         forwardGas
       );
@@ -604,7 +604,7 @@ export class PoolMessageManager {
           .endCell();
 
         return {
-          to: Address.parse(pTON_ROUTER_WALLET[routerVersion]),
+          to: Address.parse(pTON_ROUTER_WALLET[dexVersion]),
           value:
             amountIn +
             BigInt(2) * this.gasUsage.SWAP_GAS +
@@ -616,7 +616,7 @@ export class PoolMessageManager {
       default:
         const payload = JettonWallet.transferMessage(
           amountIn,
-          Address.parse(ROUTER[routerVersion]),
+          Address.parse(ROUTER[dexVersion]),
           recipient,
           null,
           BigInt(2) * this.gasUsage.SWAP_GAS +
@@ -643,7 +643,7 @@ export class PoolMessageManager {
     minimumAmountOut: bigint,
     priceLimitSqrt: bigint,
     swapType: SwapType,
-    routerVersion: RouterVersion = RouterVersion.v1,
+    dexVersion: DEX_VERSION = DEX_VERSION.v1,
     txFee: bigint = this.gasUsage.SWAP_GAS, // 0.4
     forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(4) // 4 maximum messages in tx = 0.2
   ): SenderArguments {
@@ -668,7 +668,7 @@ export class PoolMessageManager {
           .endCell();
 
         return {
-          to: Address.parse(pTON_ROUTER_WALLET[routerVersion]),
+          to: Address.parse(pTON_ROUTER_WALLET[dexVersion]),
           value: amountIn + txFee + forwardGas, // ton amountIn + 0.4 + 0.2
           body: swapRequest,
         };
@@ -676,7 +676,7 @@ export class PoolMessageManager {
       default:
         const payload = JettonWallet.transferMessage(
           amountIn,
-          Address.parse(ROUTER[routerVersion]),
+          Address.parse(ROUTER[dexVersion]),
           recipient,
           null,
           txFee + this.gasUsage.SWAP_GAS_SLIPPAGE,
@@ -703,7 +703,7 @@ export class PoolMessageManager {
     client?: Api<unknown>, // ton api client
     wallet_public_key?: string,
     walletVersion?: WalletVersion,
-    routerVersion: RouterVersion = RouterVersion.v1
+    dexVersion: DEX_VERSION = DEX_VERSION.v1
   ) {
     let txFee = this.gasUsage.SWAP_GAS; // 0.4
     const forwardGas = this.gasUsage.TRANSFER_GAS * BigInt(4); // 0.2
@@ -716,7 +716,7 @@ export class PoolMessageManager {
       minimumAmountOut,
       priceLimitSqrt,
       swapType,
-      routerVersion
+      dexVersion
     );
 
     /* emulate message */
@@ -766,7 +766,7 @@ export class PoolMessageManager {
     client?: Api<unknown>, // ton api client
     wallet_public_key?: string,
     walletVersion?: WalletVersion,
-    routerVersion: RouterVersion = RouterVersion.v1
+    dexVersion: DEX_VERSION = DEX_VERSION.v1
   ) {
     const initialSwapType = swapTypes[0];
     const hops = BigInt(swapTypes.length);
@@ -782,7 +782,7 @@ export class PoolMessageManager {
       priceLimitsSqrt,
       jettonsAreInOrder,
       swapTypes,
-      routerVersion
+      dexVersion
     );
 
     /* emulate message */

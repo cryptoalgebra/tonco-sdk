@@ -1,9 +1,8 @@
 import { Address, Cell, beginCell } from '@ton/core';
 import { ROUTER } from '../constants/addresses';
 import { ACCOUNT_CODE, POOL_CODE, POSITION_CODE } from '../constants';
-import { RouterVersion } from '../types/RouterVersion';
-import { PoolContract, PoolContractConfig } from '../contracts';
-import { poolContractConfigToCell } from './poolContractConfigToCell';
+import { DEX_VERSION } from '../types/DexVersion';
+import { PoolContract } from '../contracts';
 
 export function packPoolData(
   jetton0Wallet: Address,
@@ -11,7 +10,7 @@ export function packPoolData(
   accountV3Code: Cell,
   positionNftV3Code: Cell,
   routerAddress: Address,
-  routerVersion: RouterVersion
+  dexVersion: DEX_VERSION
 ): Cell {
   const config = {
     router_address: routerAddress,
@@ -22,7 +21,7 @@ export function packPoolData(
     accountv3_code: accountV3Code,
     position_nftv3_code: positionNftV3Code,
   };
-  return poolContractConfigToCell[routerVersion](config);
+  return PoolContract[dexVersion].poolContractConfigToCell(config);
 }
 
 export function calculatePoolStateInit(
@@ -32,19 +31,17 @@ export function calculatePoolStateInit(
   accountV3Code: Cell,
   positionNftV3Code: Cell,
   routerAddress: Address,
-  routerVersion: RouterVersion
+  dexVersion: DEX_VERSION
 ): Cell {
   let poolData: Cell;
-  if (
-    PoolContract[routerVersion].orderJettonId(jetton0Address, jetton1Address)
-  ) {
+  if (PoolContract[dexVersion].orderJettonId(jetton0Address, jetton1Address)) {
     poolData = packPoolData(
       jetton0Address,
       jetton1Address,
       accountV3Code,
       positionNftV3Code,
       routerAddress,
-      routerVersion
+      dexVersion
     );
   } else {
     poolData = packPoolData(
@@ -53,7 +50,7 @@ export function calculatePoolStateInit(
       accountV3Code,
       positionNftV3Code,
       routerAddress,
-      routerVersion
+      dexVersion
     );
   }
 
@@ -72,17 +69,17 @@ function calculateAddress(stateInit: Cell, workchain: number): Address {
 export function computePoolAddress(
   jettonWallet0: Address,
   jettonWallet1: Address,
-  routerVersion: RouterVersion = RouterVersion.v1
+  dexVersion: DEX_VERSION = DEX_VERSION.v1
 ): Address {
-  const routerAddress = Address.parse(ROUTER[routerVersion]);
+  const routerAddress = Address.parse(ROUTER[dexVersion]);
   const stateInit = calculatePoolStateInit(
     jettonWallet0,
     jettonWallet1,
-    POOL_CODE[routerVersion],
-    ACCOUNT_CODE[routerVersion],
-    POSITION_CODE[routerVersion],
+    POOL_CODE[dexVersion],
+    ACCOUNT_CODE[dexVersion],
+    POSITION_CODE[dexVersion],
     routerAddress,
-    routerVersion
+    dexVersion
   );
 
   return calculateAddress(stateInit, routerAddress.workChain);

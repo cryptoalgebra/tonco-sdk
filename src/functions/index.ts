@@ -7,3 +7,4 @@ export * from './getEmojiHash';
 export * from './emulateMessage';
 export * from './getSwapEstimate';
 export * from './validateMint';
+export * from './getPoolVersion';

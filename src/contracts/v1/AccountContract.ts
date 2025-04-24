@@ -11,7 +11,7 @@ import {
 import { ContractOpcodes } from './opCodes';
 
 /** Initial data structures and settings **/
-export type AccountV3ContractConfig = {
+export type AccountContractConfig = {
   user: Address;
   pool: Address;
   stored0: bigint;
@@ -22,39 +22,37 @@ export type AccountV3ContractConfig = {
   enough1: bigint;
 };
 
-export function accountv3ContractConfigToCell(
-  config: AccountV3ContractConfig
-): Cell {
-  return beginCell()
-    .storeAddress(config.user)
-    .storeAddress(config.pool)
-    .storeRef(
-      beginCell()
-        .storeCoins(config.stored0)
-        .storeCoins(config.stored1)
-        .storeCoins(config.enough0)
-        .storeCoins(config.enough1)
-        .endCell()
-    )
-    .endCell();
-}
-
-export class AccountV3Contract implements Contract {
+export class AccountContract implements Contract {
   constructor(
     readonly address: Address,
     readonly init?: { code: Cell; data: Cell }
   ) {}
 
+  static accountContractConfigToCell(config: AccountContractConfig): Cell {
+    return beginCell()
+      .storeAddress(config.user)
+      .storeAddress(config.pool)
+      .storeRef(
+        beginCell()
+          .storeCoins(config.stored0)
+          .storeCoins(config.stored1)
+          .storeCoins(config.enough0)
+          .storeCoins(config.enough1)
+          .endCell()
+      )
+      .endCell();
+  }
+
   static createFromConfig(
-    config: AccountV3ContractConfig,
+    config: AccountContractConfig,
     code: Cell,
     workchain = 0
   ) {
-    const data = accountv3ContractConfigToCell(config);
+    const data = this.accountContractConfigToCell(config);
     const init = { code, data };
     const address = contractAddress(workchain, init);
 
-    return new AccountV3Contract(address, init);
+    return new AccountContract(address, init);
   }
 
   async sendDeploy(provider: ContractProvider, sender: Sender, value: bigint) {

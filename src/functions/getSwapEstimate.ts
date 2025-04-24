@@ -3,7 +3,7 @@ import { Address } from '@ton/core';
 import { TickMath } from '../utils';
 import { TonClient, TonClient4 } from '@ton/ton';
 import { PoolContract } from '../contracts';
-import { RouterVersion } from '../types/RouterVersion';
+import { DEX_VERSION } from '../types/DexVersion';
 
 export async function getSwapEstimate(
   // inputJetton: Jetton,
@@ -11,10 +11,10 @@ export async function getSwapEstimate(
   poolAddress: string,
   zeroToOne: boolean,
   client: TonClient | TonClient4,
-  routerVersion: RouterVersion = RouterVersion.v1
+  DEX_VERSION: DEX_VERSION = DEX_VERSION.v1
 ): Promise<bigint> {
   const poolV3Contract = client.open(
-    new PoolContract[routerVersion](Address.parse(poolAddress))
+    new PoolContract[DEX_VERSION](Address.parse(poolAddress))
   );
 
   // /* pool.jetton0 and pool.jetton1 are always sorted, so jetton0 is always first */

@@ -4,7 +4,7 @@ import {
   POOL_CODE,
   POSITION_CODE,
 } from '../constants/code';
-import { RouterVersion } from '../types/RouterVersion';
+import { DEX_VERSION } from '../types/DexVersion';
 
 const emojiBigArray = [
     '©','®','‼','⁉','™','↖','↗','↘','↙','↩','↪','⌚','⌛','⌨','⏏','⏩','⏪',
@@ -71,11 +71,11 @@ const toncoCodes = [
   POSITION_CODE,
 ];
 
-export function getEmojiHash(routerVersion: RouterVersion): string {
+export function getEmojiHash(dexVersion: DEX_VERSION = DEX_VERSION.v1): string {
   const toncoHashes: Buffer[] = [];
 
   const toncoCells = toncoCodes.map((code) => {
-    return code[routerVersion]
+    return code[dexVersion]
   });
 
   for (const contractCell of toncoCells) {

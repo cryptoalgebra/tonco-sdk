@@ -16,3 +16,5 @@ export const MaxUint256 = JSBI.BigInt(
 export const MaxUint160 = JSBI.BigInt(
   '0xffffffffffffffffffffffffffffffffffffffff'
 );
+
+export const MaxUint120 = JSBI.BigInt('0xffffffffffffffffffffffffffffff');
