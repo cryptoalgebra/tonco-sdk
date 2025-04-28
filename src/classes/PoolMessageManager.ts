@@ -27,9 +27,13 @@ import { PoolContract, PoolFactoryContract } from '../contracts';
 import { DEX_VERSION } from '../types/DexVersion';
 
 export enum SwapType {
-  TON_TO_JETTON = 0,
-  JETTON_TO_TON = 1,
-  JETTON_TO_JETTON = 2,
+  TON_TO_JETTON_V1 = 'TON_TO_JETTON_V1',
+  JETTON_TO_TON_V1 = 'JETTON_TO_TON_V1',
+  JETTON_TO_JETTON_V1 = 'JETTON_TO_JETTON_V1',
+
+  TON_TO_JETTON_V1_5 = 'TON_TO_JETTON_V1_5',
+  JETTON_TO_TON_V1_5 = 'JETTON_TO_TON_V1_5',
+  JETTON_TO_JETTON_V1_5 = 'JETTON_TO_JETTON_V1_5',
 }
 
 function beginMessage(op: bigint | number | string): Builder {
@@ -474,8 +478,7 @@ export class PoolMessageManager {
       BigInt(4 * minimumAmountsOut.length), // TODO
     isMainCell: boolean,
     hops: bigint,
-    pathString: string,
-    dexVersion: DEX_VERSION = DEX_VERSION.v1
+    pathString: string
   ) {
     if (!jettonPath.length) return new Cell();
 
@@ -484,17 +487,26 @@ export class PoolMessageManager {
     const priceLimitSqrt = priceLimitsSqrt.shift();
     const minimumAmountOut = minimumAmountsOut.shift();
 
+    const swapType = swapTypes.shift();
+
+    const routerAddress =
+      swapType === SwapType.JETTON_TO_JETTON_V1_5 ||
+      swapType === SwapType.JETTON_TO_TON_V1_5 ||
+      swapType === SwapType.TON_TO_JETTON_V1_5
+        ? ROUTER['v1.5']
+        : ROUTER.v1;
+
     const isEmpty = !jettonPath.length;
-    const isPTON = jettonRouterWallet?.equals(
-      Address.parse(pTON_ROUTER_WALLET[dexVersion])
-    );
+    const isPTON =
+      jettonRouterWallet?.equals(Address.parse(pTON_ROUTER_WALLET.v1)) ||
+      jettonRouterWallet?.equals(Address.parse(pTON_ROUTER_WALLET['v1.5']));
 
     const getInnerMessage = (isEmpty: boolean, isPTON: boolean) => {
       if (isEmpty) return null;
 
       const innerMessage = beginCell()
         .storeAddress(
-          isPTON ? jettonRouterWallet : Address.parse(ROUTER[dexVersion])
+          isPTON ? jettonRouterWallet : Address.parse(routerAddress)
         )
         .storeCoins(
           this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * BigInt(2)
@@ -553,7 +565,6 @@ export class PoolMessageManager {
     priceLimitsSqrt: bigint[],
     jettonsAreInOrder: boolean[],
     swapTypes: SwapType[],
-    dexVersion: DEX_VERSION = DEX_VERSION.v1,
     txFee: bigint = this.gasUsage.SWAP_GAS, // 0.4
     forwardGas: bigint = this.gasUsage.TRANSFER_GAS *
       BigInt(4 * swapTypes.length)
@@ -565,7 +576,13 @@ export class PoolMessageManager {
       ...jettonPath.map(address => address.toRawString()),
     ].join('-');
 
-    if (jettonPath.length === 1)
+    if (jettonPath.length === 1 && swapTypes.length === 1) {
+      const dexVersion =
+        swapTypes[0] === SwapType.JETTON_TO_JETTON_V1 ||
+        swapTypes[0] === SwapType.JETTON_TO_TON_V1 ||
+        swapTypes[0] === SwapType.TON_TO_JETTON_V1
+          ? DEX_VERSION.v1
+          : DEX_VERSION['v1.5'];
       return this.createSwapExactInMessage(
         userJettonWallet,
         jettonPath[0],
@@ -578,6 +595,7 @@ export class PoolMessageManager {
         txFee,
         forwardGas
       );
+    }
 
     const multihopRequest = PoolMessageManager.createMultihopHops(
       jettonPath,
@@ -595,7 +613,7 @@ export class PoolMessageManager {
     );
 
     switch (initialSwapType) {
-      case SwapType.TON_TO_JETTON:
+      case SwapType.TON_TO_JETTON_V1: {
         const swapRequest = beginMessage(proxyWalletOpcodesV2.tonTransfer)
           .storeCoins(amountIn) // ton amount
           .storeAddress(recipient) // refund address
@@ -604,7 +622,7 @@ export class PoolMessageManager {
           .endCell();
 
         return {
-          to: Address.parse(pTON_ROUTER_WALLET[dexVersion]),
+          to: Address.parse(pTON_ROUTER_WALLET[DEX_VERSION.v1]),
           value:
             amountIn +
             BigInt(2) * this.gasUsage.SWAP_GAS +
@@ -612,11 +630,32 @@ export class PoolMessageManager {
           body: swapRequest,
           sendMode: SendMode.PAY_GAS_SEPARATELY,
         };
+      }
 
-      default:
+      case SwapType.TON_TO_JETTON_V1_5: {
+        const swapRequest = beginMessage(proxyWalletOpcodesV2.tonTransfer)
+          .storeCoins(amountIn) // ton amount
+          .storeAddress(recipient) // refund address
+          .storeUint(1, 1)
+          .storeRef(multihopRequest)
+          .endCell();
+
+        return {
+          to: Address.parse(pTON_ROUTER_WALLET[DEX_VERSION['v1.5']]),
+          value:
+            amountIn +
+            BigInt(2) * this.gasUsage.SWAP_GAS +
+            this.gasUsage.TRANSFER_GAS * BigInt(3),
+          body: swapRequest,
+          sendMode: SendMode.PAY_GAS_SEPARATELY,
+        };
+      }
+
+      case SwapType.JETTON_TO_TON_V1:
+      case SwapType.JETTON_TO_JETTON_V1: {
         const payload = JettonWallet.transferMessage(
           amountIn,
-          Address.parse(ROUTER[dexVersion]),
+          Address.parse(ROUTER[DEX_VERSION.v1]),
           recipient,
           null,
           BigInt(2) * this.gasUsage.SWAP_GAS +
@@ -632,6 +671,29 @@ export class PoolMessageManager {
           body: payload,
           sendMode: SendMode.PAY_GAS_SEPARATELY,
         };
+      }
+
+      case SwapType.JETTON_TO_TON_V1_5:
+      case SwapType.JETTON_TO_JETTON_V1_5: {
+        const payload = JettonWallet.transferMessage(
+          amountIn,
+          Address.parse(ROUTER[DEX_VERSION['v1.5']]),
+          recipient,
+          null,
+          BigInt(2) * this.gasUsage.SWAP_GAS +
+            this.gasUsage.TRANSFER_GAS * BigInt(4),
+          multihopRequest
+        );
+
+        return {
+          to: userJettonWallet,
+          value:
+            BigInt(2) * this.gasUsage.SWAP_GAS +
+            this.gasUsage.TRANSFER_GAS * BigInt(5),
+          body: payload,
+          sendMode: SendMode.PAY_GAS_SEPARATELY,
+        };
+      }
     }
   }
 
@@ -659,7 +721,7 @@ export class PoolMessageManager {
       .endCell();
 
     switch (swapType) {
-      case SwapType.TON_TO_JETTON:
+      case SwapType.TON_TO_JETTON_V1 || SwapType.TON_TO_JETTON_V1_5:
         swapRequest = beginMessage(proxyWalletOpcodesV2.tonTransfer)
           .storeCoins(amountIn) // ton amount
           .storeAddress(recipient) // refund address
@@ -746,7 +808,8 @@ export class PoolMessageManager {
       txFee,
       forwardGas,
       gasLimit:
-        swapType === SwapType.TON_TO_JETTON
+        swapType === SwapType.TON_TO_JETTON_V1 ||
+        swapType === SwapType.TON_TO_JETTON_V1_5
           ? message.value - amountIn
           : message.value,
     };
@@ -765,8 +828,7 @@ export class PoolMessageManager {
     swapTypes: SwapType[],
     client?: Api<unknown>, // ton api client
     wallet_public_key?: string,
-    walletVersion?: WalletVersion,
-    dexVersion: DEX_VERSION = DEX_VERSION.v1
+    walletVersion?: WalletVersion
   ) {
     const initialSwapType = swapTypes[0];
     const hops = BigInt(swapTypes.length);
@@ -781,8 +843,7 @@ export class PoolMessageManager {
       minimumAmountsOut,
       priceLimitsSqrt,
       jettonsAreInOrder,
-      swapTypes,
-      dexVersion
+      swapTypes
     );
 
     /* emulate message */
@@ -810,7 +871,8 @@ export class PoolMessageManager {
       message,
       txFee,
       gasLimit:
-        initialSwapType === SwapType.TON_TO_JETTON
+        initialSwapType === SwapType.TON_TO_JETTON_V1 ||
+        initialSwapType === SwapType.TON_TO_JETTON_V1_5
           ? message.value - amountIn
           : message.value,
     };
