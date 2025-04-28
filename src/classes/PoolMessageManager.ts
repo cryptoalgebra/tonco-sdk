@@ -42,6 +42,36 @@ function beginMessage(op: bigint | number | string): Builder {
     .storeUint(BigInt(Math.floor(Math.random() * 2 ** 31)), 64);
 }
 
+function getMultihopSwapRequest(
+  amountIn: bigint,
+  recipient: Address,
+  multihopRequest: any
+) {
+  return beginMessage(proxyWalletOpcodesV2.tonTransfer)
+    .storeCoins(amountIn) // ton amount
+    .storeAddress(recipient) // refund address
+    .storeUint(1, 1)
+    .storeRef(multihopRequest)
+    .endCell();
+}
+
+function getMultihopSwapPayload(
+  amountIn: bigint,
+  recipient: Address,
+  multihopRequest: Cell,
+  version: DEX_VERSION
+) {
+  return JettonWallet.transferMessage(
+    amountIn,
+    Address.parse(ROUTER[version]),
+    recipient,
+    null,
+    BigInt(2) * PoolMessageManager.gasUsage.SWAP_GAS +
+      PoolMessageManager.gasUsage.TRANSFER_GAS * BigInt(4),
+    multihopRequest
+  );
+}
+
 export class PoolMessageManager {
   /**
    * Cannot be constructed.
@@ -613,76 +643,42 @@ export class PoolMessageManager {
     );
 
     switch (initialSwapType) {
-      case SwapType.TON_TO_JETTON_V1: {
-        const swapRequest = beginMessage(proxyWalletOpcodesV2.tonTransfer)
-          .storeCoins(amountIn) // ton amount
-          .storeAddress(recipient) // refund address
-          .storeUint(1, 1)
-          .storeRef(multihopRequest)
-          .endCell();
-
-        return {
-          to: Address.parse(pTON_ROUTER_WALLET[DEX_VERSION.v1]),
-          value:
-            amountIn +
-            BigInt(2) * this.gasUsage.SWAP_GAS +
-            this.gasUsage.TRANSFER_GAS * BigInt(3),
-          body: swapRequest,
-          sendMode: SendMode.PAY_GAS_SEPARATELY,
-        };
-      }
-
+      case SwapType.TON_TO_JETTON_V1:
       case SwapType.TON_TO_JETTON_V1_5: {
-        const swapRequest = beginMessage(proxyWalletOpcodesV2.tonTransfer)
-          .storeCoins(amountIn) // ton amount
-          .storeAddress(recipient) // refund address
-          .storeUint(1, 1)
-          .storeRef(multihopRequest)
-          .endCell();
+        const version =
+          initialSwapType === SwapType.TON_TO_JETTON_V1
+            ? DEX_VERSION.v1
+            : DEX_VERSION['v1.5'];
 
-        return {
-          to: Address.parse(pTON_ROUTER_WALLET[DEX_VERSION['v1.5']]),
-          value:
-            amountIn +
-            BigInt(2) * this.gasUsage.SWAP_GAS +
-            this.gasUsage.TRANSFER_GAS * BigInt(3),
-          body: swapRequest,
-          sendMode: SendMode.PAY_GAS_SEPARATELY,
-        };
-      }
-
-      case SwapType.JETTON_TO_TON_V1:
-      case SwapType.JETTON_TO_JETTON_V1: {
-        const payload = JettonWallet.transferMessage(
+        const swapRequest = getMultihopSwapRequest(
           amountIn,
-          Address.parse(ROUTER[DEX_VERSION.v1]),
           recipient,
-          null,
-          BigInt(2) * this.gasUsage.SWAP_GAS +
-            this.gasUsage.TRANSFER_GAS * BigInt(4),
           multihopRequest
         );
 
         return {
-          to: userJettonWallet,
+          to: Address.parse(pTON_ROUTER_WALLET[version]),
           value:
+            amountIn +
             BigInt(2) * this.gasUsage.SWAP_GAS +
-            this.gasUsage.TRANSFER_GAS * BigInt(5),
-          body: payload,
+            this.gasUsage.TRANSFER_GAS * BigInt(3),
+          body: swapRequest,
           sendMode: SendMode.PAY_GAS_SEPARATELY,
         };
       }
 
-      case SwapType.JETTON_TO_TON_V1_5:
-      case SwapType.JETTON_TO_JETTON_V1_5: {
-        const payload = JettonWallet.transferMessage(
+      default: {
+        const version =
+          initialSwapType === SwapType.JETTON_TO_TON_V1 ||
+          initialSwapType === SwapType.JETTON_TO_JETTON_V1
+            ? DEX_VERSION.v1
+            : DEX_VERSION['v1.5'];
+
+        const payload = getMultihopSwapPayload(
           amountIn,
-          Address.parse(ROUTER[DEX_VERSION['v1.5']]),
           recipient,
-          null,
-          BigInt(2) * this.gasUsage.SWAP_GAS +
-            this.gasUsage.TRANSFER_GAS * BigInt(4),
-          multihopRequest
+          multihopRequest,
+          version
         );
 
         return {
