@@ -42,36 +42,6 @@ function beginMessage(op: bigint | number | string): Builder {
     .storeUint(BigInt(Math.floor(Math.random() * 2 ** 31)), 64);
 }
 
-function getMultihopSwapRequest(
-  amountIn: bigint,
-  recipient: Address,
-  multihopRequest: any
-) {
-  return beginMessage(proxyWalletOpcodesV2.tonTransfer)
-    .storeCoins(amountIn) // ton amount
-    .storeAddress(recipient) // refund address
-    .storeUint(1, 1)
-    .storeRef(multihopRequest)
-    .endCell();
-}
-
-function getMultihopSwapPayload(
-  amountIn: bigint,
-  recipient: Address,
-  multihopRequest: Cell,
-  version: DEX_VERSION
-) {
-  return JettonWallet.transferMessage(
-    amountIn,
-    Address.parse(ROUTER[version]),
-    recipient,
-    null,
-    BigInt(2) * PoolMessageManager.gasUsage.SWAP_GAS +
-      PoolMessageManager.gasUsage.TRANSFER_GAS * BigInt(4),
-    multihopRequest
-  );
-}
-
 export class PoolMessageManager {
   /**
    * Cannot be constructed.
@@ -496,28 +466,25 @@ export class PoolMessageManager {
   }
 
   public static createMultihopHops(
-    jettonPath: Address[], // path of jetton attached to router
-    recipient: Address,
-    amountIn: bigint,
+    jettonPath: Address[],
     minimumAmountsOut: bigint[],
     priceLimitsSqrt: bigint[],
-    jettonsAreInOrder: boolean[],
     swapTypes: SwapType[],
-    txFee: bigint = this.gasUsage.SWAP_GAS, // 0.4
-    forwardGas: bigint = this.gasUsage.TRANSFER_GAS *
-      BigInt(4 * minimumAmountsOut.length), // TODO
-    isMainCell: boolean,
-    hops: bigint,
-    pathString: string
+    recipient: Address
+    // isMainCell = true
   ) {
+    // const hops = BigInt(swapTypes.length);
+    // const pathString = [
+    //   userJettonWallet.toRawString(),
+    //   ...jettonPath.map(address => address.toRawString()),
+    // ].join('-');
+
     if (!jettonPath.length) return new Cell();
 
-    const jettonRouterWallet = jettonPath.shift();
-
-    const priceLimitSqrt = priceLimitsSqrt.shift();
-    const minimumAmountOut = minimumAmountsOut.shift();
-
-    const swapType = swapTypes.shift();
+    const [jettonRouterWallet, ...remainingJettonPath] = jettonPath;
+    const [priceLimitSqrt, ...remainingPriceLimits] = priceLimitsSqrt;
+    const [minimumAmountOut, ...remainingMinimumAmounts] = minimumAmountsOut;
+    const [swapType, ...remainingSwapTypes] = swapTypes;
 
     const routerAddress =
       swapType === SwapType.JETTON_TO_JETTON_V1_5 ||
@@ -526,7 +493,7 @@ export class PoolMessageManager {
         ? ROUTER['v1.5']
         : ROUTER.v1;
 
-    const isEmpty = !jettonPath.length;
+    const isEmpty = remainingJettonPath.length === 0;
     const isPTON =
       jettonRouterWallet?.equals(Address.parse(pTON_ROUTER_WALLET.v1)) ||
       jettonRouterWallet?.equals(Address.parse(pTON_ROUTER_WALLET['v1.5']));
@@ -543,35 +510,27 @@ export class PoolMessageManager {
         )
         .storeRef(
           this.createMultihopHops(
-            jettonPath,
-            recipient,
-            amountIn,
-            minimumAmountsOut,
-            priceLimitsSqrt,
-            jettonsAreInOrder,
-            swapTypes,
-            txFee,
-            forwardGas,
-            false,
-            hops,
-            pathString
+            remainingJettonPath,
+            remainingMinimumAmounts,
+            remainingPriceLimits,
+            remainingSwapTypes,
+            recipient
+            // false
           )
         );
 
-      if (isMainCell) {
-        innerMessage.storeCoins(0).storeRef(
-          beginCell()
-            .storeUint(0, 32)
-            .storeStringTail(
-              `Multihop | ${(crypto as any).randomUUID()} | ${hops} | ${pathString}`
-            )
-            .endCell()
-        );
-      }
+      // if (isMainCell) {
+      //   innerMessage.storeCoins(0).storeRef(
+      //     beginCell()
+      //       .storeUint(0, 32)
+      //       .storeStringTail(
+      //         `Multihop | ${(crypto as any).randomUUID()} | ${hops} | ${pathString}`
+      //       )
+      //       .endCell()
+      //   );
+      // }
 
-      innerMessage.endCell();
-
-      return innerMessage;
+      return innerMessage.endCell();
     };
 
     const multicallMessage = beginCell()
@@ -593,18 +552,12 @@ export class PoolMessageManager {
     amountIn: bigint,
     minimumAmountsOut: bigint[],
     priceLimitsSqrt: bigint[],
-    jettonsAreInOrder: boolean[],
     swapTypes: SwapType[],
     txFee: bigint = this.gasUsage.SWAP_GAS, // 0.4
     forwardGas: bigint = this.gasUsage.TRANSFER_GAS *
       BigInt(4 * swapTypes.length)
   ) {
     const initialSwapType = swapTypes[0];
-    const hops = BigInt(swapTypes.length);
-    const pathString = [
-      userJettonWallet.toRawString(),
-      ...jettonPath.map(address => address.toRawString()),
-    ].join('-');
 
     if (jettonPath.length === 1 && swapTypes.length === 1) {
       const dexVersion =
@@ -629,17 +582,10 @@ export class PoolMessageManager {
 
     const multihopRequest = PoolMessageManager.createMultihopHops(
       jettonPath,
-      recipient,
-      amountIn,
       minimumAmountsOut,
       priceLimitsSqrt,
-      jettonsAreInOrder,
       swapTypes,
-      txFee,
-      forwardGas,
-      true,
-      hops,
-      pathString
+      recipient
     );
 
     switch (initialSwapType) {
@@ -650,11 +596,12 @@ export class PoolMessageManager {
             ? DEX_VERSION.v1
             : DEX_VERSION['v1.5'];
 
-        const swapRequest = getMultihopSwapRequest(
-          amountIn,
-          recipient,
-          multihopRequest
-        );
+        const swapRequest = beginMessage(proxyWalletOpcodesV2.tonTransfer)
+          .storeCoins(amountIn) // ton amount
+          .storeAddress(recipient) // refund address
+          .storeUint(1, 1)
+          .storeRef(multihopRequest)
+          .endCell();
 
         return {
           to: Address.parse(pTON_ROUTER_WALLET[version]),
@@ -674,11 +621,14 @@ export class PoolMessageManager {
             ? DEX_VERSION.v1
             : DEX_VERSION['v1.5'];
 
-        const payload = getMultihopSwapPayload(
+        const payload = JettonWallet.transferMessage(
           amountIn,
+          Address.parse(ROUTER[version]),
           recipient,
-          multihopRequest,
-          version
+          null,
+          BigInt(2) * PoolMessageManager.gasUsage.SWAP_GAS +
+            PoolMessageManager.gasUsage.TRANSFER_GAS * BigInt(4),
+          multihopRequest
         );
 
         return {
@@ -820,7 +770,6 @@ export class PoolMessageManager {
     amountIn: bigint,
     minimumAmountsOut: bigint[],
     priceLimitsSqrt: bigint[],
-    jettonsAreInOrder: boolean[],
     swapTypes: SwapType[],
     client?: Api<unknown>, // ton api client
     wallet_public_key?: string,
@@ -838,7 +787,6 @@ export class PoolMessageManager {
       amountIn,
       minimumAmountsOut,
       priceLimitsSqrt,
-      jettonsAreInOrder,
       swapTypes
     );
 
