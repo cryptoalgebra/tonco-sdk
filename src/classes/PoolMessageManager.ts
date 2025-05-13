@@ -574,7 +574,6 @@ export class PoolMessageManager {
         minimumAmountsOut[0],
         priceLimitsSqrt[0],
         initialSwapType,
-        dexVersion,
         txFee,
         forwardGas
       );
@@ -651,11 +650,11 @@ export class PoolMessageManager {
     minimumAmountOut: bigint,
     priceLimitSqrt: bigint,
     swapType: SwapType,
-    dexVersion: DEX_VERSION = DEX_VERSION.v1,
     txFee: bigint = this.gasUsage.SWAP_GAS, // 0.4
     forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(4) // 4 maximum messages in tx = 0.2
   ): SenderArguments {
     let swapRequest;
+    let dexVersion: DEX_VERSION;
 
     swapRequest = beginCell()
       .storeUint(ContractOpcodes.POOLV3_SWAP, 32) // Request to swap
@@ -667,13 +666,18 @@ export class PoolMessageManager {
       .endCell();
 
     switch (swapType) {
-      case SwapType.TON_TO_JETTON_V1 || SwapType.TON_TO_JETTON_V1_5:
+      case SwapType.TON_TO_JETTON_V1:
+      case SwapType.TON_TO_JETTON_V1_5:
         swapRequest = beginMessage(proxyWalletOpcodesV2.tonTransfer)
           .storeCoins(amountIn) // ton amount
           .storeAddress(recipient) // refund address
           .storeUint(1, 1)
           .storeRef(swapRequest)
           .endCell();
+
+        dexVersion = swapType.endsWith('V1_5')
+          ? DEX_VERSION['v1.5']
+          : DEX_VERSION.v1;
 
         return {
           to: Address.parse(pTON_ROUTER_WALLET[dexVersion]),
@@ -682,6 +686,10 @@ export class PoolMessageManager {
         };
 
       default:
+        dexVersion = swapType.endsWith('V1_5')
+          ? DEX_VERSION['v1.5']
+          : DEX_VERSION.v1;
+
         const payload = JettonWallet.transferMessage(
           amountIn,
           Address.parse(ROUTER[dexVersion]),
@@ -710,8 +718,7 @@ export class PoolMessageManager {
     swapType: SwapType,
     client?: Api<unknown>, // ton api client
     wallet_public_key?: string,
-    walletVersion?: WalletVersion,
-    dexVersion: DEX_VERSION = DEX_VERSION.v1
+    walletVersion?: WalletVersion
   ) {
     let txFee = this.gasUsage.SWAP_GAS; // 0.4
     const forwardGas = this.gasUsage.TRANSFER_GAS * BigInt(4); // 0.2
@@ -723,8 +730,7 @@ export class PoolMessageManager {
       amountIn,
       minimumAmountOut,
       priceLimitSqrt,
-      swapType,
-      dexVersion
+      swapType
     );
 
     /* emulate message */
