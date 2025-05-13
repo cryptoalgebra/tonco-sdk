@@ -560,12 +560,6 @@ export class PoolMessageManager {
     const initialSwapType = swapTypes[0];
 
     if (jettonPath.length === 1 && swapTypes.length === 1) {
-      const dexVersion =
-        swapTypes[0] === SwapType.JETTON_TO_JETTON_V1 ||
-        swapTypes[0] === SwapType.JETTON_TO_TON_V1 ||
-        swapTypes[0] === SwapType.TON_TO_JETTON_V1
-          ? DEX_VERSION.v1
-          : DEX_VERSION['v1.5'];
       return this.createSwapExactInMessage(
         userJettonWallet,
         jettonPath[0],
