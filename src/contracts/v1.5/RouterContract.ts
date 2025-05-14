@@ -45,81 +45,81 @@ export type RouterContractConfig = {
   nonce?: bigint;
 };
 
+export function routerContractConfigToCell(config: RouterContractConfig): Cell {
+  return beginCell()
+    .storeAddress(config.adminAddress)
+    .storeAddress(config.poolAdminAddress ?? config.adminAddress)
+    .storeAddress(config.poolFactoryAddress)
+    .storeUint(config.flags ?? 0, 64)
+    .storeUint(0, 64) // seqno
+
+    .storeRef(
+      beginCell()
+        .storeRef(config.poolv3_code)
+        .storeRef(config.accountv3_code)
+        .storeRef(config.position_nftv3_code)
+        .endCell()
+    )
+
+    .storeRef(
+      beginCell()
+        .storeUint(config.timelockDelay ?? TIMELOCK_DELAY_DEFAULT, 64) // timelock Delay
+        .storeUint(0, 3) // 3 maybe refs for active timelocks
+        .endCell()
+    )
+    .storeUint(config.nonce ?? 0, 64)
+    .endCell();
+}
+
+export function routerContractCellToConfig(c: Cell): RouterContractConfig {
+  let s: Slice = c.beginParse();
+
+  const adminAddress: Address = s.loadAddress();
+  const poolAdminAddress: Address = s.loadAddress();
+  const poolFactoryAddress: Address = s.loadAddress();
+  const flags = s.loadUintBig(64);
+
+  const seqno = s.loadUintBig(64);
+
+  const subcodes = s.loadRef().beginParse();
+  const poolv3_code: Cell = subcodes.loadRef();
+  const accountv3_code: Cell = subcodes.loadRef();
+  const position_nftv3_code: Cell = subcodes.loadRef();
+
+  const timelocks = s.loadRef().beginParse();
+  const timelockDelay: bigint = timelocks.loadUintBig(64);
+
+  let nonce: bigint | undefined = undefined;
+  if (s.remainingBits != 0) {
+    nonce = s.loadUintBig(64);
+  }
+
+  return {
+    adminAddress,
+    poolAdminAddress,
+    poolFactoryAddress,
+    flags,
+    poolv3_code,
+    accountv3_code,
+    position_nftv3_code,
+    timelockDelay,
+    nonce,
+  };
+}
+
 export class RouterContract implements Contract {
-  static FLAG_PAYLOADS: bigint = BigInt('0x1');
+  static FLAG_PAYLOADS: bigint = BigInt(0x1);
   constructor(
     readonly address: Address,
     readonly init?: { code: Cell; data: Cell }
   ) {}
-
-  static routerContractConfigToCell(config: RouterContractConfig): Cell {
-    return beginCell()
-      .storeAddress(config.adminAddress)
-      .storeAddress(config.poolAdminAddress ?? config.adminAddress)
-      .storeAddress(config.poolFactoryAddress)
-      .storeUint(config.flags ?? 0, 64)
-      .storeUint(0, 64) // seqno
-
-      .storeRef(
-        beginCell()
-          .storeRef(config.poolv3_code)
-          .storeRef(config.accountv3_code)
-          .storeRef(config.position_nftv3_code)
-          .endCell()
-      )
-
-      .storeRef(
-        beginCell()
-          .storeUint(config.timelockDelay ?? TIMELOCK_DELAY_DEFAULT, 64) // timelock Delay
-          .storeUint(0, 3) // 3 maybe refs for active timelocks
-          .endCell()
-      )
-      .storeUint(config.nonce ?? 0, 64)
-      .endCell();
-  }
-
-  static routerContractCellToConfig(c: Cell): RouterContractConfig {
-    let s: Slice = c.beginParse();
-
-    const adminAddress: Address = s.loadAddress();
-    const poolAdminAddress: Address = s.loadAddress();
-    const poolFactoryAddress: Address = s.loadAddress();
-    const flags = s.loadUintBig(64);
-
-    const seqno = s.loadUintBig(64);
-
-    const subcodes = s.loadRef().beginParse();
-    const poolv3_code: Cell = subcodes.loadRef();
-    const accountv3_code: Cell = subcodes.loadRef();
-    const position_nftv3_code: Cell = subcodes.loadRef();
-
-    const timelocks = s.loadRef().beginParse();
-    const timelockDelay: bigint = timelocks.loadUintBig(64);
-
-    let nonce: bigint | undefined = undefined;
-    if (s.remainingBits != 0) {
-      nonce = s.loadUintBig(64);
-    }
-
-    return {
-      adminAddress,
-      poolAdminAddress,
-      poolFactoryAddress,
-      flags,
-      poolv3_code,
-      accountv3_code,
-      position_nftv3_code,
-      timelockDelay,
-      nonce,
-    };
-  }
 
   static createFromConfig(
     config: RouterContractConfig,
     code: Cell,
     workchain = 0
   ) {
-    const data = this.routerContractConfigToCell(config);
+    const data = routerContractConfigToCell(config);
     const init = { code, data };
     const address = contractAddress(workchain, init);
     return new RouterContract(address, init);
@@ -295,6 +295,52 @@ export class RouterContract implements Contract {
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: msg_body,
     });
+  }
+
+  /* ============= Payloads for JETTON_TRANSFER_NOTIFICATION =========== */
+
+  static swapPayloadMessage(
+    originAddress: Address, // Address to receive result of the swap
+
+    targetRW: Address, // JettonWallet attached to Router is used to identify target token
+    priceLimit?: bigint, // Minimum/maximum internal pool price that we are ready to reach
+    minOutAmount?: bigint, // Minimum amount to get back
+    payloads?: {
+      targetAddress: Address;
+      okForwardAmount: bigint;
+      okForwardPayload: Cell;
+      retForwardAmount: bigint;
+      retForwardPayload: Cell;
+    },
+    referral?: {
+      code: number;
+    }
+  ): Cell {
+    return beginCell()
+      .storeUint(ContractOpcodes.POOLV3_SWAP, 32) // Request to swap
+      .storeAddress(targetRW)
+      .storeUint(priceLimit ?? BigInt(0), 160)
+      .storeCoins(minOutAmount ?? BigInt(0))
+      .storeAddress(originAddress)
+      .storeMaybeRef(
+        payloads
+          ? beginCell()
+              .storeAddress(payloads.targetAddress)
+              .storeCoins(payloads.okForwardAmount)
+              .storeRef(payloads.okForwardPayload)
+              .storeCoins(payloads.retForwardAmount)
+              .storeRef(payloads.retForwardPayload)
+              .endCell()
+          : null
+      )
+      .storeMaybeRef(
+        referral
+          ? beginCell()
+              .storeUint(referral.code, 32)
+              .endCell()
+          : null
+      )
+      .endCell();
   }
 
   /* =============  CHANGE ADMIN =============  */
@@ -903,6 +949,38 @@ export class RouterContract implements Contract {
       },
     },
     {
+      opcode: ContractOpcodes.POOLV3_FUND_SOMEONES_ACCOUNT,
+      description:
+        'This is not a message Op this is a payload format for JETTON_TRANSFER_NOTIFICATION',
+
+      acceptor: (visitor: StructureVisitor) => {
+        visitor.visitField({
+          name: `op`,
+          type: `Uint`,
+          size: 32,
+          meta: 'op',
+          comment: '',
+        });
+        visitor.visitField({
+          name: `jetton_target_w`,
+          type: `Address`,
+          size: 267,
+          meta: '',
+          comment:
+            'Address of the second jetton wallet (first is identified by sender_address). Used to compute pool address',
+        });
+        visitor.visitField({
+          name: `to_user`,
+          type: `Address`,
+          size: 267,
+          meta: '',
+          comment: 'User to fund',
+        });
+
+        //visitor.visitField({ name:`query_id`,         type:`Uint`,    size:64,  meta:"",   comment: "queryid as of the TON documentation"})
+      },
+    },
+    {
       opcode: ContractOpcodes.POOLV3_SWAP,
       description:
         'This is not a message Op this is a payload format for JETTON_TRANSFER_NOTIFICATION' +
@@ -955,7 +1033,7 @@ export class RouterContract implements Contract {
           type: `Address`,
           size: 267,
           meta: '',
-          comment: 'Address of the reciever',
+          comment: 'Address of the receiver',
         });
         visitor.visitField({
           name: `ok_forward_amount`,
