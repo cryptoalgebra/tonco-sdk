@@ -3,14 +3,12 @@ import {
   beginCell,
   toNano,
   SenderArguments,
-  Builder,
   SendMode,
   Cell,
   Slice,
 } from '@ton/ton';
 import invariant from 'tiny-invariant';
 import JSBI from 'jsbi';
-import { crc32 } from 'crc';
 import { Api } from 'tonapi-sdk-js';
 import { ONE, ZERO } from '../constants/internalConstants';
 import { Percent, Position } from '../entities';
@@ -43,10 +41,11 @@ function buildTonTransferMessage(opts: {
   refundAddress: Address | null;
   fwdPayload: Cell | Slice;
   noPayloadOverride?: boolean; // only used to test refund
+  queryId?: number | bigint;
 }) {
   let msg_builder = beginCell()
     .storeUint(proxyWalletOpcodesV2.tonTransfer, 32)
-    .storeUint(0, 64) // query_id
+    .storeUint(opts.queryId || 0, 64) // query_id
     .storeCoins(opts.tonAmount) // ton To Send. It would we wrapped and then lp minted from them
     .storeAddress(opts.refundAddress);
 
@@ -657,6 +656,7 @@ export class PoolMessageManager {
     minimumAmountOut: bigint,
     priceLimitSqrt: bigint,
     swapType: SwapType,
+    queryId?: number | bigint,
     txFee: bigint = this.gasUsage.SWAP_GAS, // 0.4
     forwardGas: bigint = this.gasUsage.TRANSFER_GAS * BigInt(4) // 4 maximum messages in tx = 0.2
   ): SenderArguments {
@@ -679,6 +679,7 @@ export class PoolMessageManager {
           tonAmount: amountIn,
           refundAddress: recipient,
           fwdPayload: swapRequest,
+          queryId,
         });
 
         dexVersion = swapType.endsWith('V1_5')
@@ -702,7 +703,8 @@ export class PoolMessageManager {
           recipient,
           null,
           txFee + this.gasUsage.SWAP_GAS_SLIPPAGE,
-          swapRequest
+          swapRequest,
+          queryId
         );
 
         return {
@@ -724,7 +726,8 @@ export class PoolMessageManager {
     swapType: SwapType,
     client?: Api<unknown>, // ton api client
     wallet_public_key?: string,
-    walletVersion?: WalletVersion
+    walletVersion?: WalletVersion,
+    queryId?: number | bigint
   ) {
     let txFee = this.gasUsage.SWAP_GAS; // 0.4
     const forwardGas = this.gasUsage.TRANSFER_GAS * BigInt(4); // 0.2
@@ -736,7 +739,8 @@ export class PoolMessageManager {
       amountIn,
       minimumAmountOut,
       priceLimitSqrt,
-      swapType
+      swapType,
+      queryId
     );
 
     /* emulate message */
