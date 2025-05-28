@@ -8,15 +8,15 @@ export async function getPoolVersion(
   client: TonClient | TonClient4,
   poolAddress: Address
 ): Promise<DEX_VERSION> {
-  const poolContract = new PoolContract.v1(poolAddress);
+  const poolContract = new PoolContract[DEX_VERSION.v1](poolAddress);
   const contract = client.open(poolContract);
 
   const poolState = await contract.getPoolStateAndConfiguration();
 
   const poolRouterAddress = poolState.router_address;
 
-  if (poolRouterAddress.equals(Address.parse(ROUTER[DEX_VERSION['v1.5']]))) {
-    return DEX_VERSION['v1.5'];
+  if (poolRouterAddress.equals(Address.parse(ROUTER[DEX_VERSION.v1_5]))) {
+    return DEX_VERSION.v1_5;
   }
 
   return DEX_VERSION.v1;
@@ -31,8 +31,8 @@ export async function getPoolVersionByJettonWallet(
 
   const { ownerAddress } = await contract.getWalletData();
 
-  if (ownerAddress.equals(Address.parse(ROUTER['v1.5']))) {
-    return DEX_VERSION['v1.5'];
+  if (ownerAddress.equals(Address.parse(ROUTER.v1_5))) {
+    return DEX_VERSION.v1_5;
   }
 
   return DEX_VERSION.v1;

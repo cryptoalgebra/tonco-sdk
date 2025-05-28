@@ -101,8 +101,8 @@ export class PoolMessageManager {
 
     const message = {
       to:
-        dexVersion === DEX_VERSION['v1.5']
-          ? Address.parse(POOL_FACTORY[DEX_VERSION['v1.5']])
+        dexVersion === DEX_VERSION.v1_5
+          ? Address.parse(POOL_FACTORY[DEX_VERSION.v1_5])
           : Address.parse(POOL_FACTORY[DEX_VERSION.v1]),
       value: this.gasUsage.DEPLOY_POOL_GAS,
       body: payload,
@@ -526,12 +526,12 @@ export class PoolMessageManager {
       const nextSwapType = swapTypes[i + 1];
 
       const poolVersion = nextSwapType.endsWith('V1_5')
-        ? DEX_VERSION['v1.5']
+        ? DEX_VERSION.v1_5
         : DEX_VERSION.v1;
 
       const isPTON =
         routerJettonWallet.equals(Address.parse(pTON_ROUTER_WALLET.v1)) ||
-        routerJettonWallet.equals(Address.parse(pTON_ROUTER_WALLET['v1.5']));
+        routerJettonWallet.equals(Address.parse(pTON_ROUTER_WALLET.v1_5));
 
       const targetAddress = isPTON
         ? pTON_ROUTER_WALLET[poolVersion]
@@ -601,7 +601,7 @@ export class PoolMessageManager {
         const version =
           initialSwapType === SwapType.TON_TO_JETTON_V1
             ? DEX_VERSION.v1
-            : DEX_VERSION['v1.5'];
+            : DEX_VERSION.v1_5;
 
         const swapRequest = buildTonTransferMessage({
           tonAmount: amountIn,
@@ -625,7 +625,7 @@ export class PoolMessageManager {
           initialSwapType === SwapType.JETTON_TO_TON_V1 ||
           initialSwapType === SwapType.JETTON_TO_JETTON_V1
             ? DEX_VERSION.v1
-            : DEX_VERSION['v1.5'];
+            : DEX_VERSION.v1_5;
 
         const payload = JettonWallet.transferMessage(
           amountIn,
@@ -683,7 +683,7 @@ export class PoolMessageManager {
         });
 
         dexVersion = swapType.endsWith('V1_5')
-          ? DEX_VERSION['v1.5']
+          ? DEX_VERSION.v1_5
           : DEX_VERSION.v1;
 
         return {
@@ -694,7 +694,7 @@ export class PoolMessageManager {
 
       default:
         dexVersion = swapType.endsWith('V1_5')
-          ? DEX_VERSION['v1.5']
+          ? DEX_VERSION.v1_5
           : DEX_VERSION.v1;
 
         const payload = JettonWallet.transferMessage(
