@@ -40,6 +40,6 @@ export type AccountContractType = typeof AccountV1Contract;
 export type AccountContractInstanceType = AccountV1Contract;
 
 export type PoolStateAndConfiguration = {
-  ['v1']: PoolV1StateAndConfiguration;
-  ['v1.5']: PoolV1_5_StateAndConfiguration;
+  v1: PoolV1StateAndConfiguration;
+  v1_5: PoolV1_5_StateAndConfiguration;
 };

@@ -13,26 +13,26 @@ import {
 } from '../contracts/v1.5';
 
 export type RouterContractConfig = {
-  ['v1']: RouterV1ContractConfig;
-  ['v1.5']: RouterV1_5_ContractConfig;
+  v1: RouterV1ContractConfig;
+  v1_5: RouterV1_5_ContractConfig;
 };
 
 export type PoolContractConfig = {
-  ['v1']: PoolV1ContractConfig;
-  ['v1.5']: PoolV1_5_ContractConfig;
+  v1: PoolV1ContractConfig;
+  v1_5: PoolV1_5_ContractConfig;
 };
 
 export type AccountContractConfig = {
-  ['v1']: AccountV1ContractConfig;
-  ['v1.5']: AccountV1ContractConfig; // same
+  v1: AccountV1ContractConfig;
+  v1_5: AccountV1ContractConfig; // same
 };
 
 export type PositionNFTContractConfig = {
-  ['v1']: PositionNFTV1ContractConfig;
-  ['v1.5']: PositionNFTV1_5_ContractConfig;
+  v1: PositionNFTV1ContractConfig;
+  v1_5: PositionNFTV1_5_ContractConfig;
 };
 
 export type PoolFactoryContractConfig = {
-  ['v1']: PoolFactoryV1ContractConfig;
-  ['v1.5']: PoolFactoryV1_5_ContractConfig;
+  v1: PoolFactoryV1ContractConfig;
+  v1_5: PoolFactoryV1_5_ContractConfig;
 };
