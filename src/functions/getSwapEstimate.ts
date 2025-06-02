@@ -1,18 +1,20 @@
 // @ts-nocheck
 import { Address } from '@ton/core';
-import { PoolV3Contract } from '../contracts';
 import { TickMath } from '../utils';
 import { TonClient, TonClient4 } from '@ton/ton';
+import { PoolContract } from '../contracts';
+import { DEX_VERSION } from '../types/DexVersion';
 
 export async function getSwapEstimate(
   // inputJetton: Jetton,
   amountIn: bigint,
   poolAddress: string,
   zeroToOne: boolean,
-  client: TonClient | TonClient4
+  client: TonClient | TonClient4,
+  DEX_VERSION: DEX_VERSION = DEX_VERSION.v1
 ): Promise<bigint> {
   const poolV3Contract = client.open(
-    new PoolV3Contract(Address.parse(poolAddress))
+    new PoolContract[DEX_VERSION](Address.parse(poolAddress))
   );
 
   // /* pool.jetton0 and pool.jetton1 are always sorted, so jetton0 is always first */

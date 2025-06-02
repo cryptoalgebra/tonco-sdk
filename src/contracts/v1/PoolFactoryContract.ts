@@ -17,29 +17,29 @@ export type PoolFactoryContractConfig = {
   nftv3itemContent: Cell;
 };
 
-export function poolFactoryContractConfigToCell(
-  config: PoolFactoryContractConfig
-): Cell {
-  return beginCell()
-    .storeAddress(config.adminAddress)
-    .storeAddress(config.routerAddress)
-    .storeRef(config.nftv3Content)
-    .storeRef(config.nftv3itemContent)
-    .endCell();
-}
-
 export class PoolFactoryContract implements Contract {
   constructor(
     readonly address: Address,
     readonly init?: { code: Cell; data: Cell }
   ) {}
 
+  static poolFactoryContractConfigToCell(
+    config: PoolFactoryContractConfig
+  ): Cell {
+    return beginCell()
+      .storeAddress(config.adminAddress)
+      .storeAddress(config.routerAddress)
+      .storeRef(config.nftv3Content)
+      .storeRef(config.nftv3itemContent)
+      .endCell();
+  }
+
   static createFromConfig(
     config: PoolFactoryContractConfig,
     code: Cell,
     workchain = 0
   ) {
-    const data = poolFactoryContractConfigToCell(config);
+    const data = this.poolFactoryContractConfigToCell(config);
     const init = { code, data };
     const address = contractAddress(workchain, init);
     return new PoolFactoryContract(address, init);

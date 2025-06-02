@@ -11,8 +11,13 @@ import {
   SendMode,
 } from '@ton/core';
 import { ContractOpcodes } from './opCodes';
-import { packJettonOnchainMetadata } from './common/jettonContent';
-import { BLACK_HOLE_ADDRESS, IMPOSSIBLE_FEE } from '../constants';
+import { packJettonOnchainMetadata } from '../common/jettonContent';
+import { BLACK_HOLE_ADDRESS, IMPOSSIBLE_FEE } from '../../constants';
+import {
+  DictionaryTickInfo,
+  NumberedTickInfo,
+  TickInfoWrapper,
+} from '../../types/NumberedTickInfo';
 
 export interface PoolStateAndConfiguration {
   router_address: Address;
@@ -43,7 +48,7 @@ export interface PoolStateAndConfiguration {
 }
 
 /** Inital data structures and settings **/
-export type PoolV3ContractConfig = {
+export type PoolContractConfig = {
   router_address: Address;
   admin_address?: Address;
 
@@ -66,32 +71,6 @@ export type PoolV3ContractConfig = {
 
   nftContent?: Cell;
   nftItemContent?: Cell;
-};
-
-export class TickInfoWrapper {
-  constructor(
-    public liquidityGross: bigint = BigInt(0),
-    public liquidityNet: bigint = BigInt(0),
-    public outerFeeGrowth0Token: bigint = BigInt(0),
-    public outerFeeGrowth1Token: bigint = BigInt(0)
-  ) {}
-}
-
-const DictionaryTickInfo: DictionaryValue<TickInfoWrapper> = {
-  serialize(src, builder) {
-    builder.storeUint(src.liquidityGross, 256);
-    builder.storeInt(src.liquidityNet, 128);
-    builder.storeUint(src.outerFeeGrowth0Token, 256);
-    builder.storeUint(src.outerFeeGrowth1Token, 256);
-  },
-  parse(src) {
-    let tickInfo = new TickInfoWrapper();
-    tickInfo.liquidityGross = src.loadUintBig(256);
-    tickInfo.liquidityNet = src.loadIntBig(128);
-    tickInfo.outerFeeGrowth0Token = src.loadUintBig(256);
-    tickInfo.outerFeeGrowth1Token = src.loadUintBig(256);
-    return tickInfo;
-  },
 };
 
 export function embedJettonData(
@@ -145,104 +124,96 @@ export const nftItemContentPackedDefault: Cell = packJettonOnchainMetadata(
 
 //const nftItemContentPacked: Cell =  packOffchainMetadata (nftItemContent1ToPack)
 
-/* This function creates the config only form the values that affect the address */
-export function poolv3StateInitConfig(
-  jetton0Wallet: Address,
-  jetton1Wallet: Address,
-  accountV3Code: Cell,
-  positionNftV3Code: Cell,
-  routerAddress: Address
-): PoolV3ContractConfig {
-  let order = PoolV3Contract.orderJettonId(jetton0Wallet, jetton1Wallet);
-
-  const config: PoolV3ContractConfig = {
-    router_address: routerAddress,
-
-    jetton0_wallet: order ? jetton0Wallet : jetton1Wallet,
-    jetton1_wallet: order ? jetton1Wallet : jetton0Wallet,
-
-    accountv3_code: accountV3Code,
-    position_nftv3_code: positionNftV3Code,
-  };
-  return config;
-}
-
-export function poolv3ContractConfigToCell(config: PoolV3ContractConfig): Cell {
-  let ticks = Dictionary.empty(Dictionary.Keys.Int(24), DictionaryTickInfo);
-
-  return beginCell()
-    .storeAddress(config.router_address)
-    .storeUint(config.lp_fee_base ?? 30, 16)
-    .storeUint(config.protocol_fee ?? 30, 16)
-    .storeUint(config.lp_fee_current ?? 30, 16)
-    .storeAddress(config.jetton0_wallet)
-    .storeAddress(config.jetton1_wallet)
-    .storeUint(config.tick_spacing ?? 1, 24)
-    .storeUint(0, 64) // poolv3::seqno
-
-    .storeRef(
-      beginCell()
-        .storeUint(BigInt(0), 256) // poolv3::feeGrowthGlobal0X128
-        .storeUint(BigInt(0), 256) // poolv3::feeGrowthGlobal1X128
-        .storeUint(BigInt(0), 128) // poolv3::collectedProtocolFee0
-        .storeUint(BigInt(0), 128) // poolv3::collectedProtocolFee1
-
-        .storeCoins(BigInt(0)) // poolv3::reserve0
-        .storeCoins(BigInt(0)) // poolv3::reserve1
-        .endCell()
-    )
-    .storeRef(
-      beginCell()
-        .storeUint(0, 1)
-        .storeInt(config.tick ?? 0, 24)
-        .storeUint(config.price_sqrt ?? 0, 160)
-        .storeUint(config.liquidity ?? 0, 128)
-        .storeUint(0, 24) // Occupied ticks
-
-        .storeUint(0, 64) // NFT Inital counter
-        .storeUint(0, 64) // NFT Active counter
-
-        .storeAddress(config.admin_address ?? BLACK_HOLE_ADDRESS)
-        .storeAddress(BLACK_HOLE_ADDRESS) // poolv3::controller_address
-        .storeRef(
-          beginCell()
-            .storeAddress(BLACK_HOLE_ADDRESS) // poolv3::jetton0_minter
-            .storeAddress(BLACK_HOLE_ADDRESS) // poolv3::jetton1_minter
-            .endCell()
-        )
-
-        .endCell()
-    )
-    .storeRef(
-      beginCell()
-        .storeDict(ticks)
-        .endCell()
-    )
-    .storeRef(
-      beginCell()
-        .storeRef(config.accountv3_code)
-        .storeRef(config.position_nftv3_code)
-        .storeRef(config.nftContent ?? new Cell())
-        .storeRef(config.nftItemContent ?? new Cell())
-        .endCell()
-    )
-    .endCell();
-}
-
-export type NumberedTickInfo = {
-  tickNum: number;
-  liquidityGross: bigint;
-  liquidityNet: bigint;
-  outerFeeGrowth0Token?: bigint;
-  outerFeeGrowth1Token?: bigint;
-};
-
 /** Pool  **/
-export class PoolV3Contract implements Contract {
+export class PoolContract implements Contract {
   constructor(
     readonly address: Address,
     readonly init?: { code: Cell; data: Cell }
   ) {}
+
+  /* This function creates the config only form the values that affect the address */
+  static poolStateInitConfig(
+    jetton0Wallet: Address,
+    jetton1Wallet: Address,
+    accountV3Code: Cell,
+    positionNftV3Code: Cell,
+    routerAddress: Address
+  ): PoolContractConfig {
+    let order = PoolContract.orderJettonId(jetton0Wallet, jetton1Wallet);
+
+    const config: PoolContractConfig = {
+      router_address: routerAddress,
+
+      jetton0_wallet: order ? jetton0Wallet : jetton1Wallet,
+      jetton1_wallet: order ? jetton1Wallet : jetton0Wallet,
+
+      accountv3_code: accountV3Code,
+      position_nftv3_code: positionNftV3Code,
+    };
+    return config;
+  }
+
+  static poolContractConfigToCell(config: PoolContractConfig): Cell {
+    let ticks = Dictionary.empty(Dictionary.Keys.Int(24), DictionaryTickInfo);
+
+    return beginCell()
+      .storeAddress(config.router_address)
+      .storeUint(config.lp_fee_base ?? 30, 16)
+      .storeUint(config.protocol_fee ?? 30, 16)
+      .storeUint(config.lp_fee_current ?? 30, 16)
+      .storeAddress(config.jetton0_wallet)
+      .storeAddress(config.jetton1_wallet)
+      .storeUint(config.tick_spacing ?? 1, 24)
+      .storeUint(0, 64) // poolv3::seqno
+
+      .storeRef(
+        beginCell()
+          .storeUint(BigInt(0), 256) // poolv3::feeGrowthGlobal0X128
+          .storeUint(BigInt(0), 256) // poolv3::feeGrowthGlobal1X128
+          .storeUint(BigInt(0), 128) // poolv3::collectedProtocolFee0
+          .storeUint(BigInt(0), 128) // poolv3::collectedProtocolFee1
+
+          .storeCoins(BigInt(0)) // poolv3::reserve0
+          .storeCoins(BigInt(0)) // poolv3::reserve1
+          .endCell()
+      )
+      .storeRef(
+        beginCell()
+          .storeUint(0, 1)
+          .storeInt(config.tick ?? 0, 24)
+          .storeUint(config.price_sqrt ?? 0, 160)
+          .storeUint(config.liquidity ?? 0, 128)
+          .storeUint(0, 24) // Occupied ticks
+
+          .storeUint(0, 64) // NFT Inital counter
+          .storeUint(0, 64) // NFT Active counter
+
+          .storeAddress(config.admin_address ?? BLACK_HOLE_ADDRESS)
+          .storeAddress(BLACK_HOLE_ADDRESS) // poolv3::controller_address
+          .storeRef(
+            beginCell()
+              .storeAddress(BLACK_HOLE_ADDRESS) // poolv3::jetton0_minter
+              .storeAddress(BLACK_HOLE_ADDRESS) // poolv3::jetton1_minter
+              .endCell()
+          )
+
+          .endCell()
+      )
+      .storeRef(
+        beginCell()
+          .storeDict(ticks)
+          .endCell()
+      )
+      .storeRef(
+        beginCell()
+          .storeRef(config.accountv3_code)
+          .storeRef(config.position_nftv3_code)
+          .storeRef(config.nftContent ?? new Cell())
+          .storeRef(config.nftItemContent ?? new Cell())
+          .endCell()
+      )
+      .endCell();
+  }
 
   static orderJettonId(
     jetton0Wallet: Address,
@@ -269,15 +240,15 @@ export class PoolV3Contract implements Contract {
   }
 
   static createFromConfig(
-    config: PoolV3ContractConfig,
+    config: PoolContractConfig,
     code: Cell,
     workchain = 0
   ) {
-    const data = poolv3ContractConfigToCell(config);
+    const data = this.poolContractConfigToCell(config);
     const init = { code, data };
     const address = contractAddress(workchain, init);
 
-    return new PoolV3Contract(address, init);
+    return new PoolContract(address, init);
   }
 
   async sendDeploy(
@@ -511,7 +482,7 @@ export class PoolV3Contract implements Contract {
     await provider.internal(via, {
       value,
       sendMode: SendMode.PAY_GAS_SEPARATELY,
-      body: PoolV3Contract.reinitMessage(opts),
+      body: PoolContract.reinitMessage(opts),
     });
   }
 
@@ -556,7 +527,7 @@ export class PoolV3Contract implements Contract {
     lpFee: number,
     currentFee: number
   ) {
-    const msg_body = PoolV3Contract.messageSetFees(
+    const msg_body = PoolContract.messageSetFees(
       protocolFee,
       lpFee,
       currentFee
@@ -624,7 +595,7 @@ export class PoolV3Contract implements Contract {
     await provider.internal(sender, {
       value,
       sendMode: SendMode.PAY_GAS_SEPARATELY,
-      body: PoolV3Contract.messageCollectProtocol(),
+      body: PoolContract.messageCollectProtocol(),
     });
   }
 
@@ -722,7 +693,10 @@ export class PoolV3Contract implements Contract {
    *
    **/
 
-  async getTickInfo(provider: ContractProvider, tickNumber: number) {
+  async getTickInfo(
+    provider: ContractProvider,
+    tickNumber: number
+  ): Promise<TickInfoWrapper> {
     const result = await this.getTickInfosFromArr(
       provider,
       tickNumber - 1,
@@ -731,13 +705,20 @@ export class PoolV3Contract implements Contract {
       true
     );
     if (result.length == 0 || result[0].tickNum != tickNumber)
-      return new TickInfoWrapper();
+      return {
+        liquidityGross: BigInt(0),
+        liquidityNet: BigInt(0),
+        outerFeeGrowth0Token: BigInt(0),
+        outerFeeGrowth1Token: BigInt(0),
+      };
 
-    let tickInfo = new TickInfoWrapper();
-    tickInfo.liquidityGross = result[0].liquidityGross;
-    tickInfo.liquidityNet = result[0].liquidityNet;
-    tickInfo.outerFeeGrowth0Token = result[0].outerFeeGrowth0Token ?? BigInt(0);
-    tickInfo.outerFeeGrowth1Token = result[0].outerFeeGrowth1Token ?? BigInt(0);
+    const tickInfo = {
+      liquidityGross: result[0].liquidityGross,
+      liquidityNet: result[0].liquidityNet,
+      outerFeeGrowth0Token: result[0].outerFeeGrowth0Token ?? BigInt(0),
+      outerFeeGrowth1Token: result[0].outerFeeGrowth1Token ?? BigInt(0),
+    };
+
     return tickInfo;
   }
 

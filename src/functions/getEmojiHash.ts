@@ -1,9 +1,10 @@
 import {
-  ROUTERV3_CODE,
-  ACCOUNTV3_CODE,
-  POOLV3_CODE,
-  POSITIONV3_CODE,
+  ROUTER_CODE,
+  ACCOUNT_CODE,
+  POOL_CODE,
+  POSITION_CODE,
 } from '../constants/code';
+import { DEX_VERSION } from '../types/DexVersion';
 
 const emojiBigArray = [
     '©','®','‼','⁉','™','↖','↗','↘','↙','↩','↪','⌚','⌛','⌨','⏏','⏩','⏪',
@@ -63,15 +64,19 @@ function bigIntPow(base: bigint, exponent: bigint): bigint {
   return result;
 }
 
-const toncoCells = [
-  ROUTERV3_CODE,
-  POOLV3_CODE,
-  ACCOUNTV3_CODE,
-  POSITIONV3_CODE,
+const toncoCodes = [
+  ROUTER_CODE,
+  POOL_CODE,
+  ACCOUNT_CODE,
+  POSITION_CODE,
 ];
 
-export function getEmojiHash(): string {
+export function getEmojiHash(dexVersion: DEX_VERSION = DEX_VERSION.v1): string {
   const toncoHashes: Buffer[] = [];
+
+  const toncoCells = toncoCodes.map((code) => {
+    return code[dexVersion]
+  });
 
   for (const contractCell of toncoCells) {
     toncoHashes.push(contractCell.hash(0));

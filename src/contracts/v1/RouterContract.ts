@@ -10,17 +10,17 @@ import {
   Slice,
 } from '@ton/core';
 import { ContractErrors, ContractOpcodes } from './opCodes';
+import { BLACK_HOLE_ADDRESS, IMPOSSIBLE_FEE } from '../../constants';
 import {
   nftContentPackedDefault,
   nftItemContentPackedDefault,
-} from './PoolV3Contract';
-import { BLACK_HOLE_ADDRESS, IMPOSSIBLE_FEE } from '../constants';
+} from './PoolContract';
 
 /** Initial data structures and settings **/
 export const TIMELOCK_DELAY_DEFAULT: bigint =
   BigInt(2) * BigInt(24) * BigInt(60) * BigInt(60);
 
-export type RouterV3ContractConfig = {
+export type RouterContractConfig = {
   adminAddress: Address;
   poolAdminAddress?: Address;
 
@@ -35,85 +35,83 @@ export type RouterV3ContractConfig = {
   nonce?: bigint;
 };
 
-export function routerv3ContractConfigToCell(
-  config: RouterV3ContractConfig
-): Cell {
-  return beginCell()
-    .storeAddress(config.adminAddress)
-    .storeAddress(config.poolAdminAddress ?? config.adminAddress)
-    .storeAddress(config.poolFactoryAddress)
-    .storeUint(config.flags ?? 0, 64)
-    .storeUint(0, 64) // seqno
-
-    .storeRef(
-      beginCell()
-        .storeRef(config.poolv3_code)
-        .storeRef(config.accountv3_code)
-        .storeRef(config.position_nftv3_code)
-        .endCell()
-    )
-
-    .storeRef(
-      beginCell()
-        .storeUint(config.timelockDelay ?? TIMELOCK_DELAY_DEFAULT, 64) // timelock Delay
-        .storeUint(0, 3) // 3 maybe refs for active timelocks
-        .endCell()
-    )
-    .storeUint(config.nonce ?? 0, 64)
-    .endCell();
-}
-
-export function routerv3ContractCellToConfig(c: Cell): RouterV3ContractConfig {
-  let s: Slice = c.beginParse();
-
-  const adminAddress: Address = s.loadAddress();
-  const poolAdminAddress: Address = s.loadAddress();
-  const poolFactoryAddress: Address = s.loadAddress();
-  const flags = s.loadUintBig(64);
-
-  const seqno = s.loadUintBig(64);
-
-  const subcodes = s.loadRef().beginParse();
-  const poolv3_code: Cell = subcodes.loadRef();
-  const accountv3_code: Cell = subcodes.loadRef();
-  const position_nftv3_code: Cell = subcodes.loadRef();
-
-  const timelocks = s.loadRef().beginParse();
-  const timelockDelay: bigint = timelocks.loadUintBig(64);
-
-  let nonce: bigint | undefined = undefined;
-  if (s.remainingBits != 0) {
-    nonce = s.loadUintBig(64);
-  }
-
-  return {
-    adminAddress,
-    poolAdminAddress,
-    poolFactoryAddress,
-    flags,
-    poolv3_code,
-    accountv3_code,
-    position_nftv3_code,
-    timelockDelay,
-    nonce,
-  };
-}
-
-export class RouterV3Contract implements Contract {
+export class RouterContract implements Contract {
   constructor(
     readonly address: Address,
     readonly init?: { code: Cell; data: Cell }
   ) {}
 
+  static routerContractConfigToCell(config: RouterContractConfig): Cell {
+    return beginCell()
+      .storeAddress(config.adminAddress)
+      .storeAddress(config.poolAdminAddress ?? config.adminAddress)
+      .storeAddress(config.poolFactoryAddress)
+      .storeUint(config.flags ?? 0, 64)
+      .storeUint(0, 64) // seqno
+
+      .storeRef(
+        beginCell()
+          .storeRef(config.poolv3_code)
+          .storeRef(config.accountv3_code)
+          .storeRef(config.position_nftv3_code)
+          .endCell()
+      )
+
+      .storeRef(
+        beginCell()
+          .storeUint(config.timelockDelay ?? TIMELOCK_DELAY_DEFAULT, 64) // timelock Delay
+          .storeUint(0, 3) // 3 maybe refs for active timelocks
+          .endCell()
+      )
+      .storeUint(config.nonce ?? 0, 64)
+      .endCell();
+  }
+
+  static routerContractCellToConfig(c: Cell): RouterContractConfig {
+    let s: Slice = c.beginParse();
+
+    const adminAddress: Address = s.loadAddress();
+    const poolAdminAddress: Address = s.loadAddress();
+    const poolFactoryAddress: Address = s.loadAddress();
+    const flags = s.loadUintBig(64);
+
+    const seqno = s.loadUintBig(64);
+
+    const subcodes = s.loadRef().beginParse();
+    const poolv3_code: Cell = subcodes.loadRef();
+    const accountv3_code: Cell = subcodes.loadRef();
+    const position_nftv3_code: Cell = subcodes.loadRef();
+
+    const timelocks = s.loadRef().beginParse();
+    const timelockDelay: bigint = timelocks.loadUintBig(64);
+
+    let nonce: bigint | undefined = undefined;
+    if (s.remainingBits != 0) {
+      nonce = s.loadUintBig(64);
+    }
+
+    return {
+      adminAddress,
+      poolAdminAddress,
+      poolFactoryAddress,
+      flags,
+      poolv3_code,
+      accountv3_code,
+      position_nftv3_code,
+      timelockDelay,
+      nonce,
+    };
+  }
+
   static createFromConfig(
-    config: RouterV3ContractConfig,
+    config: RouterContractConfig,
     code: Cell,
     workchain = 0
   ) {
-    const data = routerv3ContractConfigToCell(config);
+    const data = this.routerContractConfigToCell(config);
     const init = { code, data };
     const address = contractAddress(workchain, init);
-    return new RouterV3Contract(address, init);
+    return new RouterContract(address, init);
   }
 
   async sendDeploy(provider: ContractProvider, via: Sender, value: bigint) {
@@ -256,7 +254,7 @@ export class RouterV3Contract implements Contract {
       currentFee?: number;
     }
   ) {
-    const msg_body = RouterV3Contract.deployPoolMessage(
+    const msg_body = RouterContract.deployPoolMessage(
       jetton0WalletAddr,
       jetton1WalletAddr,
       tickSpacing,
@@ -365,7 +363,7 @@ export class RouterV3Contract implements Contract {
       newFlags?: bigint;
     }
   ) {
-    const msg_body = RouterV3Contract.changeAdminStartMessage(opts);
+    const msg_body = RouterContract.changeAdminStartMessage(opts);
     return await provider.internal(sender, {
       value,
       sendMode: SendMode.PAY_GAS_SEPARATELY,
@@ -395,7 +393,7 @@ export class RouterV3Contract implements Contract {
     sender: Sender,
     value: bigint
   ) {
-    const msg_body = RouterV3Contract.changeAdminCommitMessage();
+    const msg_body = RouterContract.changeAdminCommitMessage();
     return await provider.internal(sender, {
       value,
       sendMode: SendMode.PAY_GAS_SEPARATELY,
@@ -460,7 +458,7 @@ export class RouterV3Contract implements Contract {
       newPoolFactory?: Address;
     }
   ) {
-    const msg_body = RouterV3Contract.changeRouterParamMessage(opts);
+    const msg_body = RouterContract.changeRouterParamMessage(opts);
     return await provider.internal(sender, {
       value,
       sendMode: SendMode.PAY_GAS_SEPARATELY,

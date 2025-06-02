@@ -26,10 +26,13 @@
 ## 📦 Installation
 
 Using npm:
+
 ```bash
 npm install @toncodex/sdk@mainnet
 ```
+
 or yarn:
+
 ```bash
 yarn add @toncodex/sdk@mainnet
 ```
@@ -44,17 +47,19 @@ yarn add jsbi@3.2.5
 ## 🚀 Getting Started
 
 ### Creating Jetton instance
+
 ```ts
 const jetton0 = new Jetton(
-  pTON_MINTER, // address
+  pTON_MINTER.v1_5, // address
   9, // decimals
   'TON', // symbol
   'TON', // name
   'https://cache.tonapi.io/imgproxy/0boBDKrVQY502vqLLXqwwZTS87PyqSQq0hke-x11lqs/rs:fill:200:200:1/g:no/aHR0cHM6Ly90b25jby5pby9zdGF0aWMvdG9rZW4vVE9OX1RPS0VOLndlYnA.webp' // image
-)
+);
 ```
 
 ### Retrieving pool data
+
 ```ts
 import { TonClient } from '@ton/ton';
 import { Address, OpenedContract } from '@ton/core';
@@ -63,17 +68,18 @@ const client = new TonClient({
   endpoint: 'https://toncenter.com/api/v2/jsonRPC',
 });
 
-const poolAddress = "EQD25vStEwc-h1QT1qlsYPQwqU5IiOhox5II0C_xsDNpMVo7" // TON - USDT
+const poolAddress = 'EQC_R1hCuGK8Q8FfHJFbimp0-EHznTuyJsdJjDl7swWYnrF0'; // TON - USDT v1.5
 
-const contract = new PoolV3Contract(Address.parse(poolAddress));
-const poolContract = client.open(contract) as OpenedContract<PoolV3Contract>;
+const contract = new PoolContract[DEX_VERSION.v1_5](Address.parse(poolAddress));
+const poolContract = client.open(contract);
 const poolData = await poolContract.getPoolStateAndConfiguration();
 ```
 
 ### Creating Pool instance
+
 ```ts
 const jetton0 = new Jetton(
-  pTON_MINTER,
+  pTON_MINTER.v1_5,
   9,
   'TON',
   'TON',
@@ -99,6 +105,7 @@ const pool = new Pool(
 ```
 
 ### Retrieving position data
+
 ```ts
 import { TonClient } from '@ton/ton';
 import { Address, OpenedContract } from '@ton/core';
@@ -107,16 +114,17 @@ const client = new TonClient({
   endpoint: 'https://toncenter.com/api/v2/jsonRPC',
 });
 
-const positionNFTAddress = "EQAy5YMXX7e3916Io3Mi9DG3Xf7UAz2bKMMioYCOeYlDm7Ry" // #3143 LP Position: [ -62160 -> -56100 ]
+const positionNFTAddress = 'EQB73aGgbxYxupNwtB17kbjTedmLa6v3JxeFcfjiwnZmbwBx'; // #0 LP Position: [ -58800 -> -55200 ]
 
 const positionContract = client.open(
-  new PositionNFTV3Contract(Address.parse(positionNFTAddress)),
+  new PositionNFTContract[DEX_VERSION.v1_5](Address.parse(positionNFTAddress))
 );
 
 const positionInfo = await positionContract.getPositionInfo();
 ```
 
 ### Creating Position instance
+
 ```ts
 const liquidity = positionInfo.liquidity.toString();
 const tickLower = positionInfo.tickLow;
@@ -131,8 +139,11 @@ const position = new Position({
 ```
 
 ## 📚 Examples & Integration
+
 Usage examples and integration guide are available on the official TONCO documentation:
+
 - [Integration FAQ](https://docs.tonco.io/technical-reference/integration-faq)
 
 ## 📄 License
+
 This project is licensed under the MIT License. See the [LICENSE](https://github.com/cryptoalgebra/tonco-sdk/blob/main/LICENSE) file for more details.

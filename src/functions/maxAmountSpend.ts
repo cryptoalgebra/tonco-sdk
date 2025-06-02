@@ -18,9 +18,13 @@ export function maxAmountSpend(
 ): JettonAmount<Jetton> | undefined {
   if (!currencyAmount) return undefined;
 
-  const isNative = Address.parse(currencyAmount.jetton.address).equals(
-    Address.parse(pTON_MINTER)
-  );
+  const isNative =
+    Address.parse(currencyAmount.jetton.address).equals(
+      Address.parse(pTON_MINTER.v1)
+    ) ||
+    Address.parse(currencyAmount.jetton.address).equals(
+      Address.parse(pTON_MINTER.v1_5)
+    );
 
   if (isNative) {
     if (

@@ -13,7 +13,7 @@ import {
 import { ContractOpcodes } from './opCodes';
 
 /** Inital data structures and settings * */
-export type PositionNFTV3ContractConfig = {
+export type PositionNFTContractConfig = {
   poolAddress: Address;
   userAddress: Address;
 
@@ -25,39 +25,39 @@ export type PositionNFTV3ContractConfig = {
   feeGrowthInside1LastX128: bigint;
 };
 
-export function positionNFTv3ContractConfigToCell(
-  config: PositionNFTV3ContractConfig
-): Cell {
-  return beginCell()
-    .storeAddress(config.poolAddress)
-    .storeAddress(config.userAddress)
-    .storeUint(config.liquidity, 128)
-    .storeInt(config.tickLow, 24)
-    .storeInt(config.tickHigh, 24)
-    .storeRef(
-      beginCell()
-        .storeUint(config.feeGrowthInside0LastX128, 256)
-        .storeUint(config.feeGrowthInside1LastX128, 256)
-        .endCell()
-    )
-    .endCell();
-}
-
-export class PositionNFTV3Contract implements Contract {
+export class PositionNFTContract implements Contract {
   constructor(
     readonly address: Address,
     readonly init?: { code: Cell; data: Cell }
   ) {}
 
+  static positionNFTContractConfigToCell(
+    config: PositionNFTContractConfig
+  ): Cell {
+    return beginCell()
+      .storeAddress(config.poolAddress)
+      .storeAddress(config.userAddress)
+      .storeUint(config.liquidity, 128)
+      .storeInt(config.tickLow, 24)
+      .storeInt(config.tickHigh, 24)
+      .storeRef(
+        beginCell()
+          .storeUint(config.feeGrowthInside0LastX128, 256)
+          .storeUint(config.feeGrowthInside1LastX128, 256)
+          .endCell()
+      )
+      .endCell();
+  }
+
   static createFromConfig(
-    config: PositionNFTV3ContractConfig,
+    config: PositionNFTContractConfig,
     code: Cell,
     workchain = 0
   ) {
-    const data = positionNFTv3ContractConfigToCell(config);
+    const data = this.positionNFTContractConfigToCell(config);
     const init = { code, data };
     const address = contractAddress(workchain, init);
-    return new PositionNFTV3Contract(address, init);
+    return new PositionNFTContract(address, init);
   }
 
   async sendDeploy(provider: ContractProvider, via: Sender, value: bigint) {

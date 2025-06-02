@@ -11,7 +11,7 @@ import {
 } from '@ton/ton';
 import { sign } from '@ton/crypto';
 import { WalletVersion } from '../types/WalletVersion';
-import { WalletContract, WalletContracts } from '../contracts/WalletContract';
+import { WalletContract, WalletContracts } from '../contracts';
 
 const signer = async (message: Cell): Promise<Buffer> =>
   sign(message.hash(), Buffer.alloc(64));
