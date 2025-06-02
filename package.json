@@ -63,5 +63,5 @@
     "tslib": "^2.6.2",
     "typescript": "^5.2.2"
   },
-  "version": "1.1.7-testnet"
+  "version": "1.1.7-mainnet"
 }
