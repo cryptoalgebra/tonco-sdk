@@ -289,11 +289,22 @@ export class PoolMessageManager {
         );
 
         if (emulation) {
-          const tonRevertedFromPool = emulation.event.actions.find(
-            event => event.TonTransfer
-          )?.TonTransfer?.amount;
+          const tonRefundAmount =
+            emulation.event.actions.find(
+              a =>
+                a.TonTransfer &&
+                Address.parse(a.TonTransfer.recipient.address).equals(recipient)
+            )?.TonTransfer?.amount ?? 0;
+
           const emulatedGas = BigInt(Math.abs(emulation.event.extra));
-          txFee = emulatedGas - BigInt(tonRevertedFromPool || 0);
+          const isOutOfRangeOrZeroSlippage =
+            slippage.equalTo(ZERO) ||
+            position.amount0.equalTo(ZERO) ||
+            position.amount1.equalTo(ZERO);
+
+          txFee = isOutOfRangeOrZeroSlippage
+            ? emulatedGas - BigInt(tonRefundAmount)
+            : emulatedGas;
         }
       } catch (e) {
         console.log('error emulation - ', e);
