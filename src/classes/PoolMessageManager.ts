@@ -66,7 +66,7 @@ export class PoolMessageManager {
     jetton0Wallet: Address,
     jetton1Wallet: Address
   ): SenderArguments {
-    const payload = PoolFactoryContract.deployPoolMessage(
+    const payload = PoolFactoryContract.factoryCreatePoolMessage(
       jetton0Minter,
       jetton1Minter,
       sqrtPriceX96,
