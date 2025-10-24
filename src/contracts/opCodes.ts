@@ -6,6 +6,7 @@
  **/
 
 export class ContractOpcodes {
+  static BOUNCE: number = 0xffffffff; // 4294967295
   static ACCOUNTV3_RESET_GAS: number = 0x42a0fb43; // 1117846339
   static ACCOUNTV3_ADD_LIQUIDITY: number = 0x3ebe5431; // 1052660785
   static ACCOUNTV3_CB_ADD_LIQUIDITY: number = 0x56dfeb8a; // 1457515402
@@ -37,6 +38,8 @@ export class ContractOpcodes {
   static POOL_FACTORY_RESET_GAS: number = 0x42a0fb43; // 1117846339
   static POOL_FACTORY_ORDER_INIT: number = 0x8b85de63; // 2340806243
   static POOL_FACTORY_EXECUTE: number = 0xd4b33b0a; // 3568515850
+  static POOL_FACTORY_ADD_TO_WHITELIST: number = 0x8d7721f0; // 2373394928
+  static POOL_FACTORY_DEL_FROM_WHITELIST: number = 0x256eb11c; // 628011292
   static POOLV3_INIT: number = 0x441c39ed; // 1142700525
   static POOLV3_LOCK: number = 0x5e74697; // 99042967
   static POOLV3_UNLOCK: number = 0x3205adbd; // 839232957
@@ -100,6 +103,7 @@ export const OpcodesLookup: { [x: number]: string } = {
   0x1a0b9d51: 'NFT_EDIT_CONTENT,POSITIONNFTV3_EDIT_CONTENT',
   0x1c04412a: 'NFT_TRANSFER_EDITORSHIP,POSITIONNFTV3_TRANSFER_EDITORSHIP',
   0x1d439ae0: 'ACCOUNTV3_GETTER_LP_ACCOUNT_DATA',
+  0x256eb11c: 'POOL_FACTORY_DEL_FROM_WHITELIST',
   0x29d22935: 'TONPROXY_MINTER_RESET_GAS',
   0x2c76b973: 'JETTON_PROVIDE_WALLET_ADDRESS,TONPROXY_MINTER_PROVIDE_WALLET_ADDRESS',
   0x2e3034ef: 'ROUTERV3_CREATE_POOL',
@@ -129,6 +133,7 @@ export const OpcodesLookup: { [x: number]: string } = {
   0x89446a42: 'ACCOUNTV3_CB_REFUND_ME',
   0x8b771735: 'NFT_REPORT_STATIC_DATA,POSITIONNFTV3_REPORT_STATIC_DATA',
   0x8b85de63: 'POOL_FACTORY_ORDER_INIT',
+  0x8d7721f0: 'POOL_FACTORY_ADD_TO_WHITELIST',
   0x98bac405: 'ROUTERV3_CHANGE_ADMIN_COMMIT',
   0x9e9a8f7f: 'POOL_FACTORY_CREATE_POOL',
   0xa1daa96d: 'ROUTERV3_PAY_TO',
@@ -151,6 +156,7 @@ export const OpcodesLookup: { [x: number]: string } = {
   0xf58760ef: 'POSITIONNFTV3_OWNERSHIP_ASSIGNED_NOTIFY',
   0xfd1a73e7: 'SINKV3_ADD',
   0xfffffeee: 'SINKV3_DUMMY',
+  0xffffffff: 'BOUNCE',
 };
 export class ContractErrors {
   static COMMON_WRONG_OP: number = 65535; // 0xffff
@@ -215,7 +221,7 @@ export class ContractErrors {
   static ROUTERV3_TIMELOCK_NOT_RESPECTED: number = 114; // 0x72
 }
 
-export const ErrorsLookup = {
+export const ErrorsLookup: { [x: number]: string } = {
   73: 'JETTON_NOT_ADMIN',
   74: 'JETTON_UNOUTHORIZED_BURN',
   75: 'JETTON_DISCOVERY_FEE_NOT_MATCHED',
