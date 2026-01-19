@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   Address,
   beginCell,
@@ -6,6 +5,7 @@ import {
   SenderArguments,
   Builder,
   SendMode,
+  Cell,
 } from '@ton/ton';
 import invariant from 'tiny-invariant';
 import JSBI from 'jsbi';
@@ -25,6 +25,7 @@ import { proxyWalletOpcodesV2 } from '../contracts/common/PTonWalletV2';
 import { emulateMessage } from '../functions/emulateMessage';
 import { WalletVersion } from '../types/WalletVersion';
 import { PoolFactoryContract } from '../contracts';
+import crypto from 'crypto';
 
 export enum SwapType {
   TON_TO_JETTON = 0,
@@ -66,7 +67,7 @@ export class PoolMessageManager {
     jetton0Wallet: Address,
     jetton1Wallet: Address
   ): SenderArguments {
-    const payload = PoolFactoryContract.factoryCreatePoolMessage(
+    const payload = PoolFactoryContract.deployPoolMessage(
       jetton0Minter,
       jetton1Minter,
       sqrtPriceX96,
@@ -100,7 +101,7 @@ export class PoolMessageManager {
     invariant(JSBI.greaterThan(position.liquidity, ZERO), 'ZERO_LIQUIDITY');
 
     const mintPartGas = txFee / BigInt(2);
-    const messages = [];
+    const messages: SenderArguments[] = [];
 
     const { amount0, amount1 } = position.mintAmounts;
     const isSorted = PoolV3Contract.orderJettonId(
@@ -132,8 +133,8 @@ export class PoolMessageManager {
       Address.parse(pTON_ROUTER_WALLET)
     );
 
-    let mintRequest0;
-    let mintRequest1;
+    let mintRequest0: Builder | Cell;
+    let mintRequest1: Builder | Cell;
 
     mintRequest0 = beginCell()
       .storeUint(ContractOpcodes.POOLV3_FUND_ACCOUNT, 32) // Request to minting part 0
@@ -204,7 +205,7 @@ export class PoolMessageManager {
       recipient,
       null,
       forwardGas, // 0.1
-      mintRequest0,
+      mintRequest0 as Cell,
       queryId
     );
 
@@ -214,7 +215,7 @@ export class PoolMessageManager {
       recipient,
       null,
       forwardGas, // 0.1
-      mintRequest1,
+      mintRequest1 as Cell,
       queryId
     );
 
@@ -222,7 +223,7 @@ export class PoolMessageManager {
       messages.push({
         to: Address.parse(pTON_ROUTER_WALLET),
         value: amount1WithSlippage + mintPartGas + forwardGas, // ton with slippage + 0.2 + 0.1
-        body: mintRequest1,
+        body: mintRequest1 as Cell,
       });
     } else if (!isJetton1TON && jetton1Amount > BigInt(0)) {
       messages.push({
@@ -236,7 +237,7 @@ export class PoolMessageManager {
       messages.push({
         to: Address.parse(pTON_ROUTER_WALLET),
         value: amount0WithSlippage + mintPartGas + forwardGas, // ton with slippage + 0.2 + 0.1
-        body: mintRequest0,
+        body: mintRequest0 as Cell,
       });
     } else if (!isJetton0TON && jetton0Amount > BigInt(0)) {
       messages.push({

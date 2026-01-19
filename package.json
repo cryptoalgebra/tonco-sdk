@@ -13,17 +13,12 @@
   },
   "scripts": {
     "start": "tsdx watch",
-    "build:mainnet": "dotenv -e .env.local tsdx build",
-    "build:testnet": "dotenv -e .env.local.testnet tsdx build",
-    "prepare:mainnet": "yarn build:mainnet",
-    "prepare:testnet": "yarn build:testnet",
-    "publish:mainnet": "yarn prepare:mainnet && yarn publish --tag mainnet",
-    "publish:testnet": "yarn prepare:testnet && yarn publish --tag testnet",
+    "build": "dotenv -e .env.local tsdx build",
+    "prepare": "yarn build --mode tetra",
     "lint": "tsdx lint",
     "size": "size-limit",
     "analyze": "size-limit --why"
   },
-  "peerDependencies": {},
   "husky": {
     "hooks": {
       "pre-commit": "tsdx lint"
@@ -63,5 +58,5 @@
     "tslib": "^2.6.2",
     "typescript": "^5.2.2"
   },
-  "version": "1.0.43-mainnet"
+  "version": "1.0.0"
 }

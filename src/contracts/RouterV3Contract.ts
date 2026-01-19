@@ -9,7 +9,7 @@ import {
   SendMode,
   Slice,
 } from '@ton/core';
-import { ContractErrors, ContractOpcodes } from './opCodes';
+import { ContractOpcodes } from './opCodes';
 import {
   nftContentPackedDefault,
   nftItemContentPackedDefault,
@@ -17,8 +17,7 @@ import {
 import { BLACK_HOLE_ADDRESS, IMPOSSIBLE_FEE } from '../constants';
 
 /** Initial data structures and settings **/
-export const TIMELOCK_DELAY_DEFAULT: bigint =
-  BigInt(2) * BigInt(24) * BigInt(60) * BigInt(60);
+export const TIMELOCK_DELAY_DEFAULT: bigint = 2n * 24n * 60n * 60n;
 
 export type RouterV3ContractConfig = {
   adminAddress: Address;
@@ -100,6 +99,10 @@ export function routerv3ContractCellToConfig(c: Cell): RouterV3ContractConfig {
 }
 
 export class RouterV3Contract implements Contract {
+  static FLAG_PAYLOADS: bigint = 0x1n;
+  static FLAG_MULTIHOP_SHORTCUT: bigint = 0x2n;
+  static FLAG_DIRECT_TON: bigint = 0x4n;
+
   constructor(
     readonly address: Address,
     readonly init?: { code: Cell; data: Cell }
@@ -134,6 +137,7 @@ export class RouterV3Contract implements Contract {
       jetton0Minter?: Address;
       jetton1Minter?: Address;
       controllerAddress?: Address;
+      arbiter_address?: Address;
 
       nftContentPacked?: Cell;
       nftItemContentPacked?: Cell;
@@ -162,6 +166,13 @@ export class RouterV3Contract implements Contract {
           .storeAddress(opts.jetton0Minter)
           .storeAddress(opts.jetton1Minter)
           .storeAddress(opts.controllerAddress)
+          .storeMaybeRef(
+            opts.arbiter_address
+              ? beginCell()
+                  .storeAddress(opts.arbiter_address)
+                  .endCell()
+              : null
+          )
           .endCell()
       )
       .endCell();
@@ -180,6 +191,7 @@ export class RouterV3Contract implements Contract {
     jetton0Minter?: Address;
     jetton1Minter?: Address;
     controllerAddress?: Address;
+    arbiter_address?: Address;
 
     nftContentPacked?: Cell;
     nftItemContentPacked?: Cell;
@@ -215,6 +227,14 @@ export class RouterV3Contract implements Contract {
     let jetton1Minter = s1.loadAddress();
     let controllerAddress = s1.loadAddress();
 
+    let arbiter_address = undefined;
+    if (s1.remainingRefs > 0) {
+      arbiter_address = s1
+        .loadRef()
+        .beginParse()
+        .loadAddress();
+    }
+
     return {
       jetton0WalletAddr,
       jetton1WalletAddr,
@@ -224,6 +244,7 @@ export class RouterV3Contract implements Contract {
       jetton0Minter,
       jetton1Minter,
       controllerAddress,
+      arbiter_address,
       nftContentPacked,
       nftItemContentPacked,
       protocolFee,
@@ -247,6 +268,7 @@ export class RouterV3Contract implements Contract {
       jetton0Minter?: Address;
       jetton1Minter?: Address;
       controllerAddress?: Address;
+      arbiter_address?: Address;
 
       nftContentPacked?: Cell;
       nftItemContentPacked?: Cell;
@@ -286,6 +308,52 @@ export class RouterV3Contract implements Contract {
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: msg_body,
     });
+  }
+
+  /* ============= Payloads for JETTON_TRANSFER_NOTIFICATION =========== */
+
+  static swapPayloadMessage(
+    originAddress: Address, // Address to receive result of the swap
+
+    targetRW: Address, // JettonWallet attached to Router is used to identify target token
+    priceLimit?: bigint, // Minimum/maximum internal pool price that we are ready to reach
+    minOutAmount?: bigint, // Minimum amount to get back
+    payloads?: {
+      targetAddress: Address;
+      okForwardAmount: bigint;
+      okForwardPayload: Cell;
+      retForwardAmount: bigint;
+      retForwardPayload: Cell;
+    },
+    referral?: {
+      code: number;
+    }
+  ): Cell {
+    return beginCell()
+      .storeUint(ContractOpcodes.POOLV3_SWAP, 32) // Request to swap
+      .storeAddress(targetRW)
+      .storeUint(priceLimit ?? BigInt(0), 160)
+      .storeCoins(minOutAmount ?? BigInt(0))
+      .storeAddress(originAddress)
+      .storeMaybeRef(
+        payloads
+          ? beginCell()
+              .storeAddress(payloads.targetAddress)
+              .storeCoins(payloads.okForwardAmount)
+              .storeRef(payloads.okForwardPayload)
+              .storeCoins(payloads.retForwardAmount)
+              .storeRef(payloads.retForwardPayload)
+              .endCell()
+          : null
+      )
+      .storeMaybeRef(
+        referral
+          ? beginCell()
+              .storeUint(referral.code, 32)
+              .endCell()
+          : null
+      )
+      .endCell();
   }
 
   /* =============  CHANGE ADMIN =============  */
@@ -410,18 +478,14 @@ export class RouterV3Contract implements Contract {
     newPoolFactory?: Address;
     //   newFlags? : bigint
   }): Cell {
-    return (
-      beginCell()
-        .storeUint(ContractOpcodes.ROUTERV3_CHANGE_PARAMS, 32) // OP code
-        .storeUint(0, 64) // QueryID what for?
-        //            .storeUint(opts.newFlags ? 1 : 0, 1)
-        //            .storeUint(opts.newFlags ?? 0, 64)
-        .storeUint(opts.newPoolFactory ? 1 : 0, 1)
-        .storeAddress(opts.newPoolFactory ?? BLACK_HOLE_ADDRESS)
-        .storeUint(opts.newPoolAdmin ? 1 : 0, 1)
-        .storeAddress(opts.newPoolAdmin ?? BLACK_HOLE_ADDRESS)
-        .endCell()
-    );
+    return beginCell()
+      .storeUint(ContractOpcodes.ROUTERV3_CHANGE_PARAMS, 32) // OP code
+      .storeUint(0, 64) // QueryID what for?
+      .storeUint(opts.newPoolFactory ? 1 : 0, 1)
+      .storeAddress(opts.newPoolFactory ?? BLACK_HOLE_ADDRESS)
+      .storeUint(opts.newPoolAdmin ? 1 : 0, 1)
+      .storeAddress(opts.newPoolAdmin ?? BLACK_HOLE_ADDRESS)
+      .endCell();
   }
 
   static unpackChangeRouterParamMessage(
@@ -429,7 +493,6 @@ export class RouterV3Contract implements Contract {
   ): {
     newPoolAdmin?: Address;
     newPoolFactory?: Address;
-    //        newFlags? : bigint
   } {
     let s = body.beginParse();
     const op = s.loadUint(32);
@@ -437,9 +500,6 @@ export class RouterV3Contract implements Contract {
       throw Error('Wrong opcode');
 
     const query_id = s.loadUint(64);
-    //        const hasNewFlags = s.loadBit()
-    //        const newFlags = hasNewFlags ? s.loadUintBig(64) : undefined
-
     const hasPoolFactory = s.loadBit();
     const newPoolFactoryV = s.loadAddress();
     const newPoolFactory = hasPoolFactory ? newPoolFactoryV : undefined;
@@ -466,6 +526,123 @@ export class RouterV3Contract implements Contract {
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: msg_body,
     });
+  }
+
+  /* =============  EMERGENCY RECOVERY =============  */
+  static emergencyRecoveryMessage(opts: {
+    target0: Address;
+    target1: Address;
+    exit_code?: bigint;
+    seqno?: bigint;
+    jetton0Wallet?: Address;
+    jetton0Amount?: bigint;
+    jetton1Wallet?: Address;
+    jetton1Amount?: bigint;
+  }): Cell {
+    return beginCell()
+      .storeUint(ContractOpcodes.ROUTERV3_PAY_TO, 32) // OP code
+      .storeUint(0, 64) // QueryID what for?
+      .storeAddress(opts.target0)
+      .storeAddress(opts.target1)
+      .storeUint(opts.exit_code ?? 0, 32)
+      .storeUint(opts.seqno ?? 0, 64)
+      .storeUint(1, 1) // Coins info
+      .storeUint(0, 1) // Indexer info
+      .storeRef(
+        beginCell() // 124 + 267 + 124 + 267 = 782
+          .storeCoins(opts.jetton0Amount ?? 0)
+          .storeAddress(opts.jetton0Wallet ?? null)
+          .storeCoins(opts.jetton1Amount ?? 0)
+          .storeAddress(opts.jetton1Wallet ?? null)
+          .endCell()
+      )
+      .endCell();
+  }
+
+  static unpackEmergencyRecoveryMessage(body: Cell) {
+    let s = body.beginParse();
+    const op = s.loadUint(32);
+    if (op != ContractOpcodes.ROUTERV3_PAY_TO) throw Error('Wrong opcode');
+    const query_id = s.loadUint(64);
+    let target0 = s.loadAddressAny();
+    let target1 = s.loadAddressAny();
+
+    let exit_code = s.loadUint(32);
+    let seqno = s.loadUintBig(64);
+    let has_coins = s.loadUint(1);
+
+    let coinsSlice = s.loadRef().beginParse();
+
+    let jetton0Amount = coinsSlice.loadCoins();
+    let jetton0Wallet = coinsSlice.loadAddressAny();
+    let jetton1Amount = coinsSlice.loadCoins();
+    let jetton1Wallet = coinsSlice.loadAddressAny();
+
+    return {
+      target0,
+      target1,
+      exit_code,
+      seqno,
+      jetton0Amount,
+      jetton0Wallet,
+      jetton1Amount,
+      jetton1Wallet,
+    };
+  }
+
+  async sendEmergencyRecoveryMessage(
+    provider: ContractProvider,
+    sender: Sender,
+    value: bigint,
+    opts: {
+      target0: Address;
+      target1: Address;
+      exit_code?: bigint;
+      seqno?: bigint;
+      jetton0Wallet?: Address;
+      jetton0Amount?: bigint;
+      jetton1Wallet?: Address;
+      jetton1Amount?: bigint;
+    }
+  ) {
+    const msg_body = RouterV3Contract.emergencyRecoveryMessage(opts);
+    return await provider.internal(sender, {
+      value,
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: msg_body,
+    });
+  }
+
+  /* ============= Merge with above ======  */
+  static unpackPayToMessagePartial(body: Cell) {
+    let s = body.beginParse();
+    const op = s.loadUint(32);
+    if (op != ContractOpcodes.ROUTERV3_PAY_TO) throw Error('Wrong opcode');
+    const query_id = s.loadUintBig(64);
+    let reciever0 = s.loadAddressAny();
+    let reciever1 = s.loadAddressAny();
+    let exit_code = s.loadUint(32);
+    let seqno = s.loadUintBig(64);
+    let has_coins = s.loadUint(1);
+
+    let coinsSlice = s.loadRef().beginParse();
+
+    let jetton0Amount = coinsSlice.loadCoins();
+    let jetton0Wallet = coinsSlice.loadAddressAny();
+    let jetton1Amount = coinsSlice.loadCoins();
+    let jetton1Wallet = coinsSlice.loadAddressAny();
+
+    return {
+      query_id,
+      reciever0,
+      reciever1,
+      exit_code,
+      seqno,
+      jetton0Amount,
+      jetton0Wallet,
+      jetton1Amount,
+      jetton1Wallet,
+    };
   }
 
   /** Getters **/
@@ -564,7 +741,4 @@ export class RouterV3Contract implements Contract {
     ]);
     return stack.readCell();
   }
-
-  public static RESULT_SWAP_OK = ContractErrors.POOLV3_RESULT_SWAP_OK;
-  public static RESULT_BURN_OK = ContractErrors.POOLV3_RESULT_BURN_OK;
 }
