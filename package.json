@@ -30,7 +30,7 @@
     "singleQuote": true,
     "trailingComma": "es5"
   },
-  "name": "@toncodex/sdk",
+  "name": "@toncodex/tetra-sdk",
   "author": "toncodex",
   "module": "dist/sdk.esm.js",
   "dependencies": {
