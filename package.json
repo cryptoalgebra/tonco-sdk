@@ -14,7 +14,7 @@
   "scripts": {
     "start": "tsdx watch",
     "build": "dotenv -e .env.local tsdx build",
-    "prepare": "yarn build --mode tetra",
+    "prepare": "yarn build",
     "lint": "tsdx lint",
     "size": "size-limit",
     "analyze": "size-limit --why"
@@ -32,7 +32,7 @@
   },
   "name": "@toncodex/tetra-sdk",
   "author": "toncodex",
-  "module": "dist/sdk.esm.js",
+  "module": "dist/tetra-sdk.esm.js",
   "dependencies": {
     "@ton/core": "^0.59.0",
     "@ton/crypto": "^3.3.0",
@@ -58,5 +58,5 @@
     "tslib": "^2.6.2",
     "typescript": "^5.2.2"
   },
-  "version": "1.0.0"
+  "version": "1.0.1"
 }
