@@ -1,3 +1,5 @@
+export { Address } from '@ton/core';
+
 export * from './entities';
 export * from './utils';
 export * from './functions';
