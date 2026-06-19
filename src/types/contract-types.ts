@@ -7,39 +7,39 @@ import {
   PoolStateAndConfiguration as PoolV1StateAndConfiguration,
 } from '../contracts/v1';
 import {
-  PoolContract as PoolV1_5_Contract,
-  RouterContract as RouterV1_5_Contract,
-  PositionNFTContract as PositionNFTV1_5_Contract,
-  PoolFactoryContract as PoolFactoryV1_5_Contract,
-  PoolStateAndConfiguration as PoolV1_5_StateAndConfiguration,
-} from '../contracts/v1.5';
+  PoolContract as PoolV1_6_Contract,
+  RouterContract as RouterV1_6_Contract,
+  PositionNFTContract as PositionNFTV1_6_Contract,
+  PoolFactoryContract as PoolFactoryV1_6_Contract,
+  PoolStateAndConfiguration as PoolV1_6_StateAndConfiguration,
+} from '../contracts/v1.6';
 
 export type RouterContractType =
   | typeof RouterV1Contract
-  | typeof RouterV1_5_Contract;
-export type RouterContractInstanceType = RouterV1Contract | RouterV1_5_Contract;
+  | typeof RouterV1_6_Contract;
+export type RouterContractInstanceType = RouterV1Contract | RouterV1_6_Contract;
 
-export type PoolContractType = typeof PoolV1Contract | typeof PoolV1_5_Contract;
-export type PoolContractInstanceType = PoolV1Contract | PoolV1_5_Contract;
+export type PoolContractType = typeof PoolV1Contract | typeof PoolV1_6_Contract;
+export type PoolContractInstanceType = PoolV1Contract | PoolV1_6_Contract;
 
 export type PositionNFTContractType =
   | typeof PositionNFTV1Contract
-  | typeof PositionNFTV1_5_Contract;
+  | typeof PositionNFTV1_6_Contract;
 export type PositionNFTContractInstanceType =
   | PositionNFTV1Contract
-  | PositionNFTV1_5_Contract;
+  | PositionNFTV1_6_Contract;
 
 export type PoolFactoryContractType =
   | typeof PoolFactoryV1Contract
-  | typeof PoolFactoryV1_5_Contract;
+  | typeof PoolFactoryV1_6_Contract;
 export type PoolFactoryContractInstanceType =
   | PoolFactoryV1Contract
-  | PoolFactoryV1_5_Contract;
+  | PoolFactoryV1_6_Contract;
 
 export type AccountContractType = typeof AccountV1Contract;
 export type AccountContractInstanceType = AccountV1Contract;
 
 export type PoolStateAndConfiguration = {
   v1: PoolV1StateAndConfiguration;
-  v1_5: PoolV1_5_StateAndConfiguration;
+  v1_6: PoolV1_6_StateAndConfiguration;
 };

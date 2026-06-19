@@ -8,41 +8,42 @@ import {
   ContractOpcodes as ContractOpcodesV1,
 } from './v1';
 import {
-  PoolContract as PoolV1_5_Contract,
-  RouterContract as RouterV1_5_Contract,
-  PositionNFTContract as PositionNFTV1_5_Contract,
-  PoolFactoryContract as PoolFactoryV1_5_Contract,
-  ContractOpcodes as ContractOpcodesV1_5,
-} from './v1.5';
+  PoolContract as PoolV1_6_Contract,
+  RouterContract as RouterV1_6_Contract,
+  PositionNFTContract as PositionNFTV1_6_Contract,
+  PoolFactoryContract as PoolFactoryV1_6_Contract,
+  ContractOpcodes as ContractOpcodesV1_6,
+  AccountContract as AccountV1_6_Contract,
+} from './v1.6';
 
 export const RouterContract = {
   [DEX_VERSION.v1]: RouterV1Contract,
-  [DEX_VERSION.v1_5]: RouterV1_5_Contract,
+  [DEX_VERSION.v1_6]: RouterV1_6_Contract,
 };
 
 export const PoolContract = {
   [DEX_VERSION.v1]: PoolV1Contract,
-  [DEX_VERSION.v1_5]: PoolV1_5_Contract,
+  [DEX_VERSION.v1_6]: PoolV1_6_Contract,
 };
 
 export const AccountContract = {
   [DEX_VERSION.v1]: AccountV1Contract,
-  [DEX_VERSION.v1_5]: AccountV1Contract, // same
+  [DEX_VERSION.v1_6]: AccountV1_6_Contract,
 };
 
 export const PositionNFTContract = {
   [DEX_VERSION.v1]: PositionNFTV1Contract,
-  [DEX_VERSION.v1_5]: PositionNFTV1_5_Contract,
+  [DEX_VERSION.v1_6]: PositionNFTV1_6_Contract,
 };
 
 export const PoolFactoryContract = {
   [DEX_VERSION.v1]: PoolFactoryV1Contract,
-  [DEX_VERSION.v1_5]: PoolFactoryV1_5_Contract,
+  [DEX_VERSION.v1_6]: PoolFactoryV1_6_Contract,
 };
 
 export const ContractOpcodes = {
   [DEX_VERSION.v1]: ContractOpcodesV1,
-  [DEX_VERSION.v1_5]: ContractOpcodesV1_5,
+  [DEX_VERSION.v1_6]: ContractOpcodesV1_6,
 };
 
 export * from './common';

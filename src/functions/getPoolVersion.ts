@@ -15,8 +15,8 @@ export async function getPoolVersion(
 
   const poolRouterAddress = poolState.router_address;
 
-  if (poolRouterAddress.equals(Address.parse(ROUTER[DEX_VERSION.v1_5]))) {
-    return DEX_VERSION.v1_5;
+  if (poolRouterAddress.equals(Address.parse(ROUTER[DEX_VERSION.v1_6]))) {
+    return DEX_VERSION.v1_6;
   }
 
   return DEX_VERSION.v1;
@@ -31,8 +31,8 @@ export async function getPoolVersionByJettonWallet(
 
   const { ownerAddress } = await contract.getWalletData();
 
-  if (ownerAddress.equals(Address.parse(ROUTER.v1_5))) {
-    return DEX_VERSION.v1_5;
+  if (ownerAddress.equals(Address.parse(ROUTER.v1_6))) {
+    return DEX_VERSION.v1_6;
   }
 
   return DEX_VERSION.v1;

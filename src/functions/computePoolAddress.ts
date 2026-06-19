@@ -4,83 +4,64 @@ import { ACCOUNT_CODE, POOL_CODE, POSITION_CODE } from '../constants';
 import { DEX_VERSION } from '../types/DexVersion';
 import { PoolContract } from '../contracts';
 
-export function packPoolData(
+/**
+ * Computes the address of a liquidity pool based on the router's jetton wallet addresses.
+ * @param jetton0Wallet - Address of the first jetton wallet attached to the router
+ * @param jetton1Wallet - Address of the second jetton wallet attached to the router
+ * @param dexVersion - DEX version (defaults to v1)
+ * @param timelockDelay - Optional timelock delay for v1.6+ (defaults to 24 hours)
+ * @returns The computed pool address
+ */
+export function computePoolAddress(
   jetton0Wallet: Address,
   jetton1Wallet: Address,
-  accountV3Code: Cell,
-  positionNftV3Code: Cell,
-  routerAddress: Address,
-  dexVersion: DEX_VERSION
-): Cell {
-  const config = {
-    router_address: routerAddress,
+  dexVersion: DEX_VERSION = DEX_VERSION.v1,
+  timelockDelay: bigint = 24n * 60n * 60n
+): Address {
+  const routerAddress = Address.parse(ROUTER[dexVersion]);
 
-    jetton0_wallet: jetton0Wallet,
-    jetton1_wallet: jetton1Wallet,
+  const poolData = packPoolData(
+    jetton0Wallet,
+    jetton1Wallet,
+    routerAddress,
+    dexVersion,
+    timelockDelay
+  );
 
-    accountv3_code: accountV3Code,
-    position_nftv3_code: positionNftV3Code,
-  };
-  return PoolContract[dexVersion].poolContractConfigToCell(config);
-}
-
-export function calculatePoolStateInit(
-  jetton0Address: Address,
-  jetton1Address: Address,
-  poolCode: Cell,
-  accountV3Code: Cell,
-  positionNftV3Code: Cell,
-  routerAddress: Address,
-  dexVersion: DEX_VERSION
-): Cell {
-  let poolData: Cell;
-  if (PoolContract[dexVersion].orderJettonId(jetton0Address, jetton1Address)) {
-    poolData = packPoolData(
-      jetton0Address,
-      jetton1Address,
-      accountV3Code,
-      positionNftV3Code,
-      routerAddress,
-      dexVersion
-    );
-  } else {
-    poolData = packPoolData(
-      jetton1Address,
-      jetton0Address,
-      accountV3Code,
-      positionNftV3Code,
-      routerAddress,
-      dexVersion
-    );
-  }
-
-  return beginCell()
+  const stateInit = beginCell()
     .storeUint(0, 2)
-    .storeMaybeRef(poolCode)
+    .storeMaybeRef(POOL_CODE[dexVersion])
     .storeMaybeRef(poolData)
     .storeUint(0, 1)
     .endCell();
+
+  return new Address(routerAddress.workChain, stateInit.hash());
 }
 
-function calculateAddress(stateInit: Cell, workchain: number): Address {
-  return new Address(workchain, stateInit.hash());
-}
+export function packPoolData(
+  jetton0Wallet: Address,
+  jetton1Wallet: Address,
+  routerAddress: Address,
+  dexVersion: DEX_VERSION,
+  timelockDelay: bigint
+): Cell {
+  if (dexVersion === DEX_VERSION.v1) {
+    const config = PoolContract[DEX_VERSION.v1].poolStateInitConfig(
+      jetton0Wallet,
+      jetton1Wallet,
+      ACCOUNT_CODE[dexVersion],
+      POSITION_CODE[dexVersion],
+      routerAddress
+    );
+    return PoolContract[DEX_VERSION.v1].poolContractConfigToCell(config);
+  }
 
-export function computePoolAddress(
-  jettonWallet0: Address,
-  jettonWallet1: Address,
-  dexVersion: DEX_VERSION = DEX_VERSION.v1
-): Address {
-  const routerAddress = Address.parse(ROUTER[dexVersion]);
-  const stateInit = calculatePoolStateInit(
-    jettonWallet0,
-    jettonWallet1,
-    POOL_CODE[dexVersion],
-    ACCOUNT_CODE[dexVersion],
-    POSITION_CODE[dexVersion],
+  const config = PoolContract[DEX_VERSION.v1_6].poolStateInitConfig(
+    jetton0Wallet,
+    jetton1Wallet,
     routerAddress,
-    dexVersion
+    timelockDelay
   );
 
-  return calculateAddress(stateInit, routerAddress.workChain);
+  return PoolContract[DEX_VERSION.v1_6].poolContractConfigToCell(config);
 }

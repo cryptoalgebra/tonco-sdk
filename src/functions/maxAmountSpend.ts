@@ -23,7 +23,7 @@ export function maxAmountSpend(
       Address.parse(pTON_MINTER.v1)
     ) ||
     Address.parse(currencyAmount.jetton.address).equals(
-      Address.parse(pTON_MINTER.v1_5)
+      Address.parse(pTON_MINTER.v1_6)
     );
 
   if (isNative) {

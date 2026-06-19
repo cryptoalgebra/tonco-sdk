@@ -24,16 +24,21 @@ import { emulateMessage } from '../functions/emulateMessage';
 import { WalletVersion } from '../types/WalletVersion';
 import { PoolContract, PoolFactoryContract } from '../contracts';
 import { DEX_VERSION } from '../types/DexVersion';
-import { RouterContract } from '../contracts/v1.5';
+import { ContractOpcodes as ContractOpcodesV1_6 } from '../contracts/v1.6/opCodes';
+import {
+  MINT_NOT_LESS,
+  packReforgeOrderBody,
+} from '../contracts/v1.6/ReforgeOrder';
+import { RouterContract } from '../contracts/v1.6';
 
 export enum SwapType {
   TON_TO_JETTON_V1 = 'TON_TO_JETTON_V1',
   JETTON_TO_TON_V1 = 'JETTON_TO_TON_V1',
   JETTON_TO_JETTON_V1 = 'JETTON_TO_JETTON_V1',
 
-  TON_TO_JETTON_V1_5 = 'TON_TO_JETTON_V1_5',
-  JETTON_TO_TON_V1_5 = 'JETTON_TO_TON_V1_5',
-  JETTON_TO_JETTON_V1_5 = 'JETTON_TO_JETTON_V1_5',
+  TON_TO_JETTON_V1_6 = 'TON_TO_JETTON_V1_6',
+  JETTON_TO_TON_V1_6 = 'JETTON_TO_TON_V1_6',
+  JETTON_TO_JETTON_V1_6 = 'JETTON_TO_JETTON_V1_6',
 }
 
 function buildTonTransferMessage(opts: {
@@ -60,6 +65,16 @@ function buildTonTransferMessage(opts: {
   }
   return msg_builder.endCell();
 }
+
+type BurnActionsV1_6 = {
+  target_address0?: Address | null;
+  target_address1?: Address | null;
+  ton_forward0?: bigint;
+  forward_payload0?: Cell | null;
+  ton_forward1?: bigint;
+  forward_payload1?: Cell | null;
+  excessAddress?: Address | null;
+};
 
 export class PoolMessageManager {
   /**
@@ -100,10 +115,7 @@ export class PoolMessageManager {
     );
 
     const message = {
-      to:
-        dexVersion === DEX_VERSION.v1_5
-          ? Address.parse(POOL_FACTORY[DEX_VERSION.v1_5])
-          : Address.parse(POOL_FACTORY[DEX_VERSION.v1]),
+      to: Address.parse(POOL_FACTORY[dexVersion]),
       value: this.gasUsage.DEPLOY_POOL_GAS,
       body: payload,
     };
@@ -163,45 +175,90 @@ export class PoolMessageManager {
     let mintRequest0;
     let mintRequest1;
 
-    mintRequest0 = beginCell()
-      .storeUint(ContractOpcodes.POOLV3_FUND_ACCOUNT, 32) // Request to minting part 0
-      .storeAddress(routerJetton1Wallet) // Jetton1 Wallet attached to Router is used to identify target token
-      .storeCoins(jetton0Amount)
-      .storeCoins(jetton1Amount)
-      .storeUint(BigInt(position.liquidity.toString()), 128) // Liquidity. First transaction don't want actully to mint anything.
-      .storeInt(BigInt(position.tickLower.toString()), 24) // Min tick.  Actually for the part 1 could be 0 it is ignored
-      .storeInt(BigInt(position.tickUpper.toString()), 24); // Max tick.  Actually for the part 1 could be 0 it is ignored
+    if (dexVersion === DEX_VERSION.v1_6) {
+      const effectiveTickLower = isSorted
+        ? position.tickLower
+        : -position.tickUpper;
+      const effectiveTickUpper = isSorted
+        ? position.tickUpper
+        : -position.tickLower;
 
-    if (referral) {
-      mintRequest0.storeMaybeRef(
-        beginCell()
-          .storeUint(0, 32)
-          .storeStringTail(referral)
-          .endCell()
-      );
+      const mintOrder = {
+        op: MINT_NOT_LESS,
+        liquidity: BigInt(position.liquidity.toString()),
+        tickLower: effectiveTickLower,
+        tickUpper: effectiveTickUpper,
+        nftReceiver: recipient,
+      };
+
+      mintRequest0 = beginCell()
+        .storeUint(ContractOpcodesV1_6.POOL_FUND_ACCOUNT, 32)
+        .storeAddress(routerJetton1Wallet)
+        .storeBuilder(
+          packReforgeOrderBody({
+            enough0: jetton0Amount,
+            enough1: jetton1Amount,
+            posNeeded: BigInt(0),
+            passthrough: 0,
+            mintOrders: [mintOrder],
+          })
+        )
+        .endCell();
+
+      mintRequest1 = beginCell()
+        .storeUint(ContractOpcodesV1_6.POOL_FUND_ACCOUNT, 32)
+        .storeAddress(routerJetton0Wallet)
+        .storeBuilder(
+          packReforgeOrderBody({
+            enough0: jetton0Amount,
+            enough1: jetton1Amount,
+            posNeeded: BigInt(0),
+            passthrough: 0,
+            mintOrders: [mintOrder],
+          })
+        )
+        .endCell();
+    } else {
+      mintRequest0 = beginCell()
+        .storeUint(ContractOpcodes.POOLV3_FUND_ACCOUNT, 32) // Request to minting part 0
+        .storeAddress(routerJetton1Wallet) // Jetton1 Wallet attached to Router is used to identify target token
+        .storeCoins(jetton0Amount)
+        .storeCoins(jetton1Amount)
+        .storeUint(BigInt(position.liquidity.toString()), 128) // Liquidity. First transaction don't want actully to mint anything.
+        .storeInt(BigInt(position.tickLower.toString()), 24) // Min tick.  Actually for the part 1 could be 0 it is ignored
+        .storeInt(BigInt(position.tickUpper.toString()), 24); // Max tick.  Actually for the part 1 could be 0 it is ignored
+
+      if (referral) {
+        mintRequest0.storeMaybeRef(
+          beginCell()
+            .storeUint(0, 32)
+            .storeStringTail(referral)
+            .endCell()
+        );
+      }
+
+      mintRequest0.endCell();
+
+      mintRequest1 = beginCell()
+        .storeUint(ContractOpcodes.POOLV3_FUND_ACCOUNT, 32) // Request to minting part 1
+        .storeAddress(routerJetton0Wallet) // Jetton0 Wallet attached to Router is used to identify target token
+        .storeCoins(jetton1Amount)
+        .storeCoins(jetton0Amount)
+        .storeUint(BigInt(position.liquidity.toString()), 128) // Liquidity to mint
+        .storeInt(BigInt(position.tickLower.toString()), 24) // Min tick.
+        .storeInt(BigInt(position.tickUpper.toString()), 24); // Max tick.
+
+      if (referral) {
+        mintRequest1.storeMaybeRef(
+          beginCell()
+            .storeUint(0, 32)
+            .storeStringTail(referral)
+            .endCell()
+        );
+      }
+
+      mintRequest1.endCell();
     }
-
-    mintRequest0.endCell();
-
-    mintRequest1 = beginCell()
-      .storeUint(ContractOpcodes.POOLV3_FUND_ACCOUNT, 32) // Request to minting part 1
-      .storeAddress(routerJetton0Wallet) // Jetton0 Wallet attached to Router is used to identify target token
-      .storeCoins(jetton1Amount)
-      .storeCoins(jetton0Amount)
-      .storeUint(BigInt(position.liquidity.toString()), 128) // Liquidity to mint
-      .storeInt(BigInt(position.tickLower.toString()), 24) // Min tick.
-      .storeInt(BigInt(position.tickUpper.toString()), 24); // Max tick.
-
-    if (referral) {
-      mintRequest1.storeMaybeRef(
-        beginCell()
-          .storeUint(0, 32)
-          .storeStringTail(referral)
-          .endCell()
-      );
-    }
-
-    mintRequest1.endCell();
 
     if (isJetton0TON) {
       mintRequest0 = beginCell()
@@ -347,16 +404,50 @@ export class PoolMessageManager {
     tickLower: number,
     tickUpper: number,
     liquidityToBurn: bigint,
-    txFee: bigint = this.gasUsage.BURN_GAS
+    txFee: bigint = this.gasUsage.BURN_GAS,
+    dexVersion: DEX_VERSION = DEX_VERSION.v1,
+    actions?: BurnActionsV1_6
   ): SenderArguments {
-    const payload = beginCell()
-      .storeUint(ContractOpcodes.POOLV3_START_BURN, 32) // op
-      .storeUint(0, 64) // query id
-      .storeUint(tokenId, 64)
-      .storeUint(liquidityToBurn, 128)
-      .storeInt(tickLower, 24)
-      .storeInt(tickUpper, 24)
-      .endCell();
+    let payload: Cell;
+
+    console.log(`${dexVersion} Burn message creation`);
+
+    if (dexVersion === DEX_VERSION.v1_6) {
+      payload = beginCell()
+        .storeUint(ContractOpcodesV1_6.POOL_START_BURN, 32)
+        .storeUint(0, 64)
+        .storeUint(tokenId, 64)
+        .storeUint(liquidityToBurn, 128)
+        .storeInt(tickLower, 24)
+        .storeInt(tickUpper, 24)
+        .storeMaybeRef(
+          actions
+            ? beginCell()
+                .storeAddress(actions.target_address0 ?? null)
+                .storeAddress(actions.target_address1 ?? null)
+                .storeMaybeRef(
+                  beginCell()
+                    .storeCoins(actions.ton_forward0 ?? BigInt(0))
+                    .storeMaybeRef(actions.forward_payload0 ?? null)
+                    .storeCoins(actions.ton_forward1 ?? BigInt(0))
+                    .storeMaybeRef(actions.forward_payload1 ?? null)
+                    .storeAddress(actions.excessAddress ?? null)
+                    .endCell()
+                )
+                .endCell()
+            : null
+        )
+        .endCell();
+    } else {
+      payload = beginCell()
+        .storeUint(ContractOpcodes.POOLV3_START_BURN, 32) // op
+        .storeUint(0, 64) // query id
+        .storeUint(tokenId, 64)
+        .storeUint(liquidityToBurn, 128)
+        .storeInt(tickLower, 24)
+        .storeInt(tickUpper, 24)
+        .endCell();
+    }
 
     const message = {
       to: poolAddress,
@@ -376,7 +467,9 @@ export class PoolMessageManager {
     client?: Api<unknown>, // ton api client
     wallet?: string,
     wallet_public_key?: string,
-    walletVersion?: WalletVersion
+    walletVersion?: WalletVersion,
+    dexVersion: DEX_VERSION = DEX_VERSION.v1,
+    actions?: BurnActionsV1_6
   ) {
     let txFee = this.gasUsage.BURN_GAS; // 0.3
 
@@ -385,7 +478,10 @@ export class PoolMessageManager {
       tokenId,
       tickLower,
       tickUpper,
-      liquidityToBurn
+      liquidityToBurn,
+      txFee,
+      dexVersion,
+      actions
     );
 
     if (wallet && client && wallet_public_key && walletVersion) {
@@ -421,7 +517,8 @@ export class PoolMessageManager {
     tokenId: number,
     tickLower: number,
     tickUpper: number,
-    txFee: bigint = this.gasUsage.BURN_GAS
+    txFee: bigint = this.gasUsage.BURN_GAS,
+    dexVersion: DEX_VERSION = DEX_VERSION.v1
   ): SenderArguments {
     const message = this.createBurnMessage(
       poolAddress,
@@ -429,7 +526,8 @@ export class PoolMessageManager {
       tickLower,
       tickUpper,
       BigInt(0),
-      txFee
+      txFee,
+      dexVersion
     );
 
     return message;
@@ -443,7 +541,8 @@ export class PoolMessageManager {
     client?: Api<unknown>, // ton api client
     wallet?: string,
     wallet_public_key?: string,
-    walletVersion?: WalletVersion
+    walletVersion?: WalletVersion,
+    dexVersion: DEX_VERSION = DEX_VERSION.v1
   ) {
     let txFee = this.gasUsage.BURN_GAS; // 0.3
     const forwardGas = BigInt(0);
@@ -452,7 +551,9 @@ export class PoolMessageManager {
       poolAddress,
       tokenId,
       tickLower,
-      tickUpper
+      tickUpper,
+      txFee,
+      dexVersion
     );
 
     if (wallet && client && wallet_public_key && walletVersion) {
@@ -525,13 +626,13 @@ export class PoolMessageManager {
 
       const nextSwapType = swapTypes[i + 1];
 
-      const poolVersion = nextSwapType.endsWith('V1_5')
-        ? DEX_VERSION.v1_5
+      const poolVersion = nextSwapType.endsWith('V1_6')
+        ? DEX_VERSION.v1_6
         : DEX_VERSION.v1;
 
       const isPTON =
         routerJettonWallet.equals(Address.parse(pTON_ROUTER_WALLET.v1)) ||
-        routerJettonWallet.equals(Address.parse(pTON_ROUTER_WALLET.v1_5));
+        routerJettonWallet.equals(Address.parse(pTON_ROUTER_WALLET.v1_6));
 
       const targetAddress = isPTON
         ? pTON_ROUTER_WALLET[poolVersion]
@@ -549,6 +650,7 @@ export class PoolMessageManager {
               okForwardPayload: payload,
               retForwardAmount: BigInt(0),
               retForwardPayload: Cell.EMPTY,
+              excessAddress: null,
             }
           : undefined
       );
@@ -597,11 +699,11 @@ export class PoolMessageManager {
 
     switch (initialSwapType) {
       case SwapType.TON_TO_JETTON_V1:
-      case SwapType.TON_TO_JETTON_V1_5: {
+      case SwapType.TON_TO_JETTON_V1_6: {
         const version =
           initialSwapType === SwapType.TON_TO_JETTON_V1
             ? DEX_VERSION.v1
-            : DEX_VERSION.v1_5;
+            : DEX_VERSION.v1_6;
 
         const swapRequest = buildTonTransferMessage({
           tonAmount: amountIn,
@@ -625,7 +727,7 @@ export class PoolMessageManager {
           initialSwapType === SwapType.JETTON_TO_TON_V1 ||
           initialSwapType === SwapType.JETTON_TO_JETTON_V1
             ? DEX_VERSION.v1
-            : DEX_VERSION.v1_5;
+            : DEX_VERSION.v1_6;
 
         const payload = JettonWallet.transferMessage(
           amountIn,
@@ -674,7 +776,7 @@ export class PoolMessageManager {
 
     switch (swapType) {
       case SwapType.TON_TO_JETTON_V1:
-      case SwapType.TON_TO_JETTON_V1_5:
+      case SwapType.TON_TO_JETTON_V1_6:
         swapRequest = buildTonTransferMessage({
           tonAmount: amountIn,
           refundAddress: recipient,
@@ -682,8 +784,8 @@ export class PoolMessageManager {
           queryId,
         });
 
-        dexVersion = swapType.endsWith('V1_5')
-          ? DEX_VERSION.v1_5
+        dexVersion = swapType.endsWith('V1_6')
+          ? DEX_VERSION.v1_6
           : DEX_VERSION.v1;
 
         return {
@@ -693,8 +795,8 @@ export class PoolMessageManager {
         };
 
       default:
-        dexVersion = swapType.endsWith('V1_5')
-          ? DEX_VERSION.v1_5
+        dexVersion = swapType.endsWith('V1_6')
+          ? DEX_VERSION.v1_6
           : DEX_VERSION.v1;
 
         const payload = JettonWallet.transferMessage(
@@ -771,7 +873,7 @@ export class PoolMessageManager {
       forwardGas,
       gasLimit:
         swapType === SwapType.TON_TO_JETTON_V1 ||
-        swapType === SwapType.TON_TO_JETTON_V1_5
+        swapType === SwapType.TON_TO_JETTON_V1_6
           ? message.value - amountIn
           : message.value,
     };
@@ -832,7 +934,7 @@ export class PoolMessageManager {
       txFee,
       gasLimit:
         initialSwapType === SwapType.TON_TO_JETTON_V1 ||
-        initialSwapType === SwapType.TON_TO_JETTON_V1_5
+        initialSwapType === SwapType.TON_TO_JETTON_V1_6
           ? message.value - amountIn
           : message.value,
     };
