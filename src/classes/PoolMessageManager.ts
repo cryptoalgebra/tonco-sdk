@@ -592,7 +592,9 @@ export class PoolMessageManager {
     priceLimitSqrt: bigint,
     minimumAmountOut: bigint,
     nextPayload?: Cell,
-    nextTargetAddress?: Address
+    nextTargetAddress?: Address,
+    isMainCell: boolean = false,
+    pathString: string = ''
   ): Cell {
     if (dexVersion === DEX_VERSION.v1_6) {
       return RouterContractV1_6.swapPayloadMessage(
@@ -613,23 +615,32 @@ export class PoolMessageManager {
       );
     }
 
+    const nextMessage =
+      nextPayload && nextTargetAddress
+        ? beginCell()
+            .storeAddress(nextTargetAddress)
+            .storeCoins(
+              this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * BigInt(2)
+            )
+            .storeRef(nextPayload)
+        : null;
+
+    if (nextMessage && isMainCell) {
+      nextMessage.storeCoins(0).storeRef(
+        beginCell()
+          .storeUint(0, 32)
+          .storeStringTail(`Multihop | ${pathString}`)
+          .endCell()
+      );
+    }
+
     return beginCell()
       .storeUint(ContractOpcodes.POOLV3_SWAP, 32)
       .storeAddress(routerJettonWallet)
       .storeUint(priceLimitSqrt, 160)
       .storeCoins(minimumAmountOut)
       .storeAddress(recipient)
-      .storeMaybeRef(
-        nextPayload && nextTargetAddress
-          ? beginCell()
-              .storeAddress(nextTargetAddress)
-              .storeCoins(
-                this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * BigInt(2)
-              )
-              .storeRef(nextPayload)
-              .endCell()
-          : null
-      )
+      .storeMaybeRef(nextMessage?.endCell() ?? null)
       .endCell();
   }
 
@@ -638,7 +649,8 @@ export class PoolMessageManager {
     minimumAmountsOut: bigint[], // min amount out for each hop
     priceLimitsSqrt: bigint[], // price limit for each hop
     swapTypes: SwapType[],
-    recipient: Address
+    recipient: Address,
+    pathString: string = ''
   ) {
     if (routerJettonWallets.length < 1) {
       throw new Error('At least one hop is required');
@@ -698,7 +710,9 @@ export class PoolMessageManager {
         priceLimitSqrt,
         minimumAmountOut,
         payload,
-        Address.parse(targetAddress)
+        Address.parse(targetAddress),
+        i === 0,
+        pathString
       );
 
       payload = message;
@@ -744,7 +758,8 @@ export class PoolMessageManager {
       minimumAmountsOut,
       priceLimitsSqrt,
       swapTypes,
-      recipient
+      recipient,
+      pathString
     );
 
     switch (initialSwapType) {
