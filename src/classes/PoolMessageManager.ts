@@ -29,7 +29,7 @@ import {
   MINT_NOT_LESS,
   packReforgeOrderBody,
 } from '../contracts/v1.6/ReforgeOrder';
-import { RouterContract } from '../contracts/v1.6';
+import { RouterContract as RouterContractV1_6 } from '../contracts/v1.6';
 
 export enum SwapType {
   TON_TO_JETTON_V1 = 'TON_TO_JETTON_V1',
@@ -585,6 +585,54 @@ export class PoolMessageManager {
     return emulatedMessage;
   }
 
+  private static createSwapPayloadMessage(
+    dexVersion: DEX_VERSION,
+    recipient: Address,
+    routerJettonWallet: Address,
+    priceLimitSqrt: bigint,
+    minimumAmountOut: bigint,
+    nextPayload?: Cell,
+    nextTargetAddress?: Address
+  ): Cell {
+    if (dexVersion === DEX_VERSION.v1_6) {
+      return RouterContractV1_6.swapPayloadMessage(
+        recipient,
+        routerJettonWallet,
+        priceLimitSqrt,
+        minimumAmountOut,
+        nextPayload && nextTargetAddress
+          ? {
+              targetAddress: nextTargetAddress,
+              okForwardAmount: toNano(1),
+              okForwardPayload: nextPayload,
+              retForwardAmount: BigInt(0),
+              retForwardPayload: Cell.EMPTY,
+              excessAddress: null,
+            }
+          : undefined
+      );
+    }
+
+    return beginCell()
+      .storeUint(ContractOpcodes.POOLV3_SWAP, 32)
+      .storeAddress(routerJettonWallet)
+      .storeUint(priceLimitSqrt, 160)
+      .storeCoins(minimumAmountOut)
+      .storeAddress(recipient)
+      .storeMaybeRef(
+        nextPayload && nextTargetAddress
+          ? beginCell()
+              .storeAddress(nextTargetAddress)
+              .storeCoins(
+                this.gasUsage.SWAP_GAS + this.gasUsage.TRANSFER_GAS * BigInt(2)
+              )
+              .storeRef(nextPayload)
+              .endCell()
+          : null
+      )
+      .endCell();
+  }
+
   public static createMultihopHops(
     routerJettonWallets: Address[], // path of output jetton wallets attached to router
     minimumAmountsOut: bigint[], // min amount out for each hop
@@ -611,11 +659,16 @@ export class PoolMessageManager {
       const routerJettonWallet = routerJettonWallets[i];
       const minimumAmountOut = minimumAmountsOut[i];
       const priceLimitSqrt = priceLimitsSqrt[i];
+      const swapType = swapTypes[i];
+      const dexVersion = swapType.endsWith('V1_6')
+        ? DEX_VERSION.v1_6
+        : DEX_VERSION.v1;
 
       const isLastHop = i === lastHopIndex;
 
       if (isLastHop) {
-        payload = RouterContract.swapPayloadMessage(
+        payload = this.createSwapPayloadMessage(
+          dexVersion,
           recipient,
           routerJettonWallet,
           priceLimitSqrt,
@@ -626,7 +679,7 @@ export class PoolMessageManager {
 
       const nextSwapType = swapTypes[i + 1];
 
-      const poolVersion = nextSwapType.endsWith('V1_6')
+      const nextDexVersion = nextSwapType.endsWith('V1_6')
         ? DEX_VERSION.v1_6
         : DEX_VERSION.v1;
 
@@ -635,24 +688,17 @@ export class PoolMessageManager {
         routerJettonWallet.equals(Address.parse(pTON_ROUTER_WALLET.v1_6));
 
       const targetAddress = isPTON
-        ? pTON_ROUTER_WALLET[poolVersion]
-        : ROUTER[poolVersion];
+        ? pTON_ROUTER_WALLET[nextDexVersion]
+        : ROUTER[nextDexVersion];
 
-      const message = RouterContract.swapPayloadMessage(
+      const message = this.createSwapPayloadMessage(
+        dexVersion,
         recipient,
         routerJettonWallet,
         priceLimitSqrt,
         minimumAmountOut,
-        !isLastHop
-          ? {
-              targetAddress: Address.parse(targetAddress),
-              okForwardAmount: toNano(1),
-              okForwardPayload: payload,
-              retForwardAmount: BigInt(0),
-              retForwardPayload: Cell.EMPTY,
-              excessAddress: null,
-            }
-          : undefined
+        payload,
+        Address.parse(targetAddress)
       );
 
       payload = message;
@@ -674,6 +720,10 @@ export class PoolMessageManager {
       BigInt(4 * swapTypes.length)
   ) {
     const initialSwapType = swapTypes[0];
+    const pathString = [
+      userJettonWallet.toRawString(),
+      ...routerJettonWallets.map(address => address.toRawString()),
+    ].join('-');
 
     if (routerJettonWallets.length === 1 && swapTypes.length === 1) {
       return this.createSwapExactInMessage(
