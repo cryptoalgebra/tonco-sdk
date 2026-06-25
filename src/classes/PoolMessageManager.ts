@@ -609,9 +609,16 @@ export class PoolMessageManager {
               okForwardPayload: nextPayload,
               retForwardAmount: BigInt(0),
               retForwardPayload: Cell.EMPTY,
-              excessAddress: null,
+              excessAddress: recipient,
             }
-          : undefined
+          : {
+              targetAddress: recipient,
+              okForwardAmount: BigInt(0),
+              okForwardPayload: null,
+              retForwardAmount: BigInt(0),
+              retForwardPayload: null,
+              excessAddress: recipient,
+            }
       );
     }
 
