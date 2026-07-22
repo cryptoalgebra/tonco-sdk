@@ -1,5 +1,5 @@
 import JSBI from 'jsbi';
-import { subIn256 } from './tickLibrary';
+import { asUint256, subIn256 } from './tickLibrary';
 
 const Q128 = JSBI.exponentiate(JSBI.BigInt(2), JSBI.BigInt(128));
 
@@ -17,9 +17,21 @@ export abstract class PositionLibrary {
     feeGrowthInside0X128: JSBI,
     feeGrowthInside1X128: JSBI
   ) {
+    const normalizedFeeGrowthInside0LastX128 = asUint256(
+      feeGrowthInside0LastX128
+    );
+    const normalizedFeeGrowthInside1LastX128 = asUint256(
+      feeGrowthInside1LastX128
+    );
+    const normalizedFeeGrowthInside0X128 = asUint256(feeGrowthInside0X128);
+    const normalizedFeeGrowthInside1X128 = asUint256(feeGrowthInside1X128);
+
     const tokensOwed0 = JSBI.divide(
       JSBI.multiply(
-        subIn256(feeGrowthInside0X128, feeGrowthInside0LastX128),
+        subIn256(
+          normalizedFeeGrowthInside0X128,
+          normalizedFeeGrowthInside0LastX128
+        ),
         liquidity
       ),
       Q128
@@ -27,7 +39,10 @@ export abstract class PositionLibrary {
 
     const tokensOwed1 = JSBI.divide(
       JSBI.multiply(
-        subIn256(feeGrowthInside1X128, feeGrowthInside1LastX128),
+        subIn256(
+          normalizedFeeGrowthInside1X128,
+          normalizedFeeGrowthInside1LastX128
+        ),
         liquidity
       ),
       Q128
