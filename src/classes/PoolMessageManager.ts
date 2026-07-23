@@ -26,7 +26,7 @@ import { PoolContract, PoolFactoryContract } from '../contracts';
 import { DEX_VERSION } from '../types/DexVersion';
 import { ContractOpcodes as ContractOpcodesV1_6 } from '../contracts/v1.6/opCodes';
 import {
-  MINT_NOT_LESS,
+  MINT_AS_MUCH_AS_POSSIBLE,
   packReforgeOrderBody,
 } from '../contracts/v1.6/ReforgeOrder';
 import { RouterContract as RouterContractV1_6 } from '../contracts/v1.6';
@@ -155,15 +155,27 @@ export class PoolMessageManager {
       ? BigInt(amount1.toString())
       : BigInt(amount0.toString());
 
+    const isMintAsMuchAsPossible = dexVersion === DEX_VERSION.v1_6;
     const slippageMultiplier = slippage.add(ONE);
 
-    /* to transfer with slippage */
-    const amount0WithSlippage = BigInt(
-      slippageMultiplier.multiply(jetton0Amount.toString()).quotient.toString()
-    );
-    const amount1WithSlippage = BigInt(
-      slippageMultiplier.multiply(jetton1Amount.toString()).quotient.toString()
-    );
+    /*
+     * v1: liquidity is fixed, so token amounts include slippage.
+     * v1.6: token amounts are the maximum input, so they are sent as-is.
+     */
+    const amount0ToSend = isMintAsMuchAsPossible
+      ? jetton0Amount
+      : BigInt(
+          slippageMultiplier
+            .multiply(jetton0Amount.toString())
+            .quotient.toString()
+        );
+    const amount1ToSend = isMintAsMuchAsPossible
+      ? jetton1Amount
+      : BigInt(
+          slippageMultiplier
+            .multiply(jetton1Amount.toString())
+            .quotient.toString()
+        );
 
     const isJetton0TON = routerJetton0Wallet.equals(
       Address.parse(pTON_ROUTER_WALLET[dexVersion])
@@ -176,6 +188,13 @@ export class PoolMessageManager {
     let mintRequest1;
 
     if (dexVersion === DEX_VERSION.v1_6) {
+      const liquidityWithSlippage = slippageMultiplier
+        .invert()
+        .multiply(position.liquidity).quotient;
+      const minimumLiquidity = JSBI.greaterThan(liquidityWithSlippage, ZERO)
+        ? liquidityWithSlippage
+        : JSBI.BigInt(1);
+
       const effectiveTickLower = isSorted
         ? position.tickLower
         : -position.tickUpper;
@@ -184,8 +203,8 @@ export class PoolMessageManager {
         : -position.tickLower;
 
       const mintOrder = {
-        op: MINT_NOT_LESS,
-        liquidity: BigInt(position.liquidity.toString()),
+        op: MINT_AS_MUCH_AS_POSSIBLE,
+        liquidity: BigInt(minimumLiquidity.toString()),
         tickLower: effectiveTickLower,
         tickUpper: effectiveTickUpper,
         nftReceiver: recipient,
@@ -264,7 +283,7 @@ export class PoolMessageManager {
       mintRequest0 = beginCell()
         .storeUint(proxyWalletOpcodesV2.tonTransfer, 32)
         .storeUint(queryId, 64) // query_id
-        .storeCoins(amount0WithSlippage) // ton To Send. It would we wrapped and then lp minted from them
+        .storeCoins(amount0ToSend) // ton To Send. It would we wrapped and then lp minted from them
         .storeAddress(recipient) // refundAddress
         .storeUint(1, 1) // flag that shows that paylod is a cell
         .storeRef(mintRequest0) // Instructions for the pool
@@ -276,7 +295,7 @@ export class PoolMessageManager {
       mintRequest1 = beginCell()
         .storeUint(proxyWalletOpcodesV2.tonTransfer, 32)
         .storeUint(queryId, 64) // query_id
-        .storeCoins(amount1WithSlippage) // ton To Send. It would we wrapped and then lp minted from them
+        .storeCoins(amount1ToSend) // ton To Send. It would we wrapped and then lp minted from them
         .storeAddress(recipient) // refundAddress
         .storeUint(1, 1) // flag that shows that paylod is a cell
         .storeRef(mintRequest1) // Instructions for the pool
@@ -284,7 +303,7 @@ export class PoolMessageManager {
     }
 
     const payload0 = JettonWallet.transferMessage(
-      amount0WithSlippage,
+      amount0ToSend,
       Address.parse(ROUTER[dexVersion]),
       recipient,
       null,
@@ -294,7 +313,7 @@ export class PoolMessageManager {
     );
 
     const payload1 = JettonWallet.transferMessage(
-      amount1WithSlippage,
+      amount1ToSend,
       Address.parse(ROUTER[dexVersion]),
       recipient,
       null,
@@ -303,10 +322,10 @@ export class PoolMessageManager {
       queryId
     );
 
-    if (isJetton1TON && amount1WithSlippage > BigInt(0)) {
+    if (isJetton1TON && amount1ToSend > BigInt(0)) {
       messages.push({
         to: Address.parse(pTON_ROUTER_WALLET[dexVersion]),
-        value: amount1WithSlippage + mintPartGas + forwardGas, // ton with slippage + 0.2 + 0.1
+        value: amount1ToSend + mintPartGas + forwardGas,
         body: mintRequest1 as Cell,
       });
     } else if (!isJetton1TON && jetton1Amount > BigInt(0)) {
@@ -317,10 +336,10 @@ export class PoolMessageManager {
       });
     }
 
-    if (isJetton0TON && amount0WithSlippage > BigInt(0)) {
+    if (isJetton0TON && amount0ToSend > BigInt(0)) {
       messages.push({
         to: Address.parse(pTON_ROUTER_WALLET[dexVersion]),
-        value: amount0WithSlippage + mintPartGas + forwardGas, // ton with slippage + 0.2 + 0.1
+        value: amount0ToSend + mintPartGas + forwardGas,
         body: mintRequest0 as Cell,
       });
     } else if (!isJetton0TON && jetton0Amount > BigInt(0)) {
