@@ -50,7 +50,7 @@ yarn add jsbi@3.2.5
 
 ```ts
 const jetton0 = new Jetton(
-  pTON_MINTER.v1_5, // address
+  pTON_MINTER.v1_6, // address
   9, // decimals
   'TON', // symbol
   'TON', // name
@@ -68,9 +68,9 @@ const client = new TonClient({
   endpoint: 'https://toncenter.com/api/v2/jsonRPC',
 });
 
-const poolAddress = 'EQC_R1hCuGK8Q8FfHJFbimp0-EHznTuyJsdJjDl7swWYnrF0'; // TON - USDT v1.5
+const poolAddress = 'EQBPTSLamspzALssCkevAbqS2J3GtH7E5Z0tm6XI0DaPyWzE'; // GRAM - USDT v1.6
 
-const contract = new PoolContract[DEX_VERSION.v1_5](Address.parse(poolAddress));
+const contract = new PoolContract[DEX_VERSION.v1_6](Address.parse(poolAddress));
 const poolContract = client.open(contract);
 const poolData = await poolContract.getPoolStateAndConfiguration();
 ```
@@ -79,10 +79,10 @@ const poolData = await poolContract.getPoolStateAndConfiguration();
 
 ```ts
 const jetton0 = new Jetton(
-  pTON_MINTER.v1_5,
+  pTON_MINTER.v1_6,
   9,
-  'TON',
-  'TON',
+  'GRAM',
+  'GRAM',
   'https://cache.tonapi.io/imgproxy/0boBDKrVQY502vqLLXqwwZTS87PyqSQq0hke-x11lqs/rs:fill:200:200:1/g:no/aHR0cHM6Ly90b25jby5pby9zdGF0aWMvdG9rZW4vVE9OX1RPS0VOLndlYnA.webp'
 )
 const jetton1 = new Jetton(
@@ -117,7 +117,7 @@ const client = new TonClient({
 const positionNFTAddress = 'EQB73aGgbxYxupNwtB17kbjTedmLa6v3JxeFcfjiwnZmbwBx'; // #0 LP Position: [ -58800 -> -55200 ]
 
 const positionContract = client.open(
-  new PositionNFTContract[DEX_VERSION.v1_5](Address.parse(positionNFTAddress))
+  new PositionNFTContract[DEX_VERSION.v1_6](Address.parse(positionNFTAddress))
 );
 
 const positionInfo = await positionContract.getPositionInfo();
